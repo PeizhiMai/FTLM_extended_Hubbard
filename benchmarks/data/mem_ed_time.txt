@@ -1,0 +1,21 @@
+# ED: all eigenlevels for 4×2 (8 sites) — expect minutes of CPU time...
+max|n_python_ED - n_cpp_TSV| = 1.207e-02  (levels=65536)
+wrote benchmarks/data/n_vs_mu_4x2_beta20_ftlm_ed_compare.png
+      161.01 real       360.40 user       152.88 sys
+          2170343424  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             2890657  page reclaims
+                 527  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                 884  voluntary context switches
+            23921459  involuntary context switches
+       4618574913217  instructions retired
+       1802496178152  cycles elapsed
+          2196148456  peak memory footprint

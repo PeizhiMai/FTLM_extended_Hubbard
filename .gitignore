@@ -1,0 +1,12 @@
+build/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.cache/
+*.npz
+.DS_Store
+compile_commands.json
+CMakeUserPresets.json
+bench_out/
+bench_2x2_spectrum.png

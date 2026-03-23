@@ -1,0 +1,15 @@
+# 4×2 PBC resource comparison (same Hubbard defaults as 2×2 n(μ) benchmark)
+# ED: NumPy eigvalsh in each (N_up,N_down) block + grand-canonical μ loop.
+# FTLM: stochastic Lanczos extrema in (4,4) sector — precursor workload, not full FTLM trace.
+
+ed: METRIC kind=ED_numpy_block lx=4 ly=2 wall_ed_s=172.96 wall_gc_mu_loop_s=3.04787 wall_total_s=176.007 levels=65536 n_mu=221 beta=20.0 max_rss_mib=1483.586 rss_after_ed_mib=1483.586 rss_baseline_mib=27.078
+ed: # ED: block-diagonal eigvalsh per (N_up,N_down); grand-canonical loop over 221 μ values.
+ftlm: === 4×2 FTLM precursor: stochastic Lanczos (matrix-free) ===
+ftlm: sector N_up=4 N_dn=4 dim=4900  samples=32  lanczos-steps=128
+ftlm: t=1 t'=-0.35 U=5.75 V=0.9
+ftlm: avg Ritz E_min=6.4902  E_max=44.8811 (not thermodynamic observables; diagnostic only)
+ftlm: METRIC kind=FTLM_precursor_lanczos Lx=4 Ly=2 dim=4900 n_up=4 n_dn=4 samples=32 lanczos_steps_req=128 sum_lanczos_steps_used=4096 matvec_count=4096 wall_s=21.9964 max_rss_mib=7.55469 rss_baseline_mib=3.69531
+
+## Summary
+| ED (NumPy block)   | wall_total_s=176.007 | max_rss_mib=1483.586 | levels=65536 |
+| FTLM precursor     | wall_s=21.9964 | max_rss_mib=7.55469 | matvec=4096 | dim=4900 |

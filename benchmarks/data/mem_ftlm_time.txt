@@ -1,0 +1,6 @@
+=== FTLM grand-canonical n(mu)  4x2  beta=20 ===
+t=1 tp=-0.35 U=5.75 V=0.9
+ftlm_random=16 lanczos_steps=96  sectors=81
+[timing] all sectors logZ: 190.385 s
+wrote /Users/cosdis/Desktop/AI_builder/ftlm_extended_hubbard/benchmarks/data/n_vs_mu_4x2_beta20_ftlm.tsv
+METRIC kind=FTLM_nmu_rect Lx=4 Ly=2 beta=20 wall_sector_logZ_s=190.385 n_mu=221

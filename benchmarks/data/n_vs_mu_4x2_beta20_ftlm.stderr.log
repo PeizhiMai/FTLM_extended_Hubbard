@@ -1,0 +1,99 @@
+sector (0,0) dim=1 logZ=-0
+sector (0,1) dim=8 logZ=56.787
+sector (0,2) dim=28 logZ=95.0755
+sector (0,3) dim=56 logZ=119.54
+sector (0,4) dim=70 logZ=130.049
+sector (0,5) dim=56 logZ=126.987
+sector (0,6) dim=28 logZ=28.4356
+sector (0,7) dim=8 logZ=-79.7206
+sector (0,8) dim=1 logZ=-288
+sector (1,0) dim=8 logZ=56.787
+sector (1,1) dim=64 logZ=101.405
+sector (1,2) dim=224 logZ=123.245
+sector (1,3) dim=448 logZ=133.687
+sector (1,4) dim=560 logZ=127.937
+sector (1,5) dim=448 logZ=82.0183
+sector (1,6) dim=224 logZ=-36.5697
+sector (1,7) dim=64 logZ=-175.406
+sector (1,8) dim=8 logZ=-418.434
+sector (2,0) dim=28 logZ=95.0755
+sector (2,1) dim=224 logZ=123.21
+sector (2,2) dim=784 logZ=136.378
+sector (2,3) dim=1568 logZ=127.83
+sector (2,4) dim=1960 logZ=88.8633
+sector (2,5) dim=1568 logZ=14.3196
+sector (2,6) dim=784 logZ=-116.256
+sector (2,7) dim=224 logZ=-295.49
+sector (2,8) dim=28 logZ=-566.545
+sector (3,0) dim=56 logZ=119.54
+sector (3,1) dim=448 logZ=133.893
+sector (3,2) dim=1568 logZ=127.536
+sector (3,3) dim=3136 logZ=91.5506
+sector (3,4) dim=3920 logZ=19.9447
+sector (3,5) dim=3136 logZ=-72.9901
+sector (3,6) dim=1568 logZ=-231.277
+sector (3,7) dim=448 logZ=-437.364
+sector (3,8) dim=56 logZ=-729.484
+sector (4,0) dim=70 logZ=130.049
+sector (4,1) dim=560 logZ=128.14
+sector (4,2) dim=1960 logZ=88.95
+sector (4,3) dim=3920 logZ=20.2228
+sector (4,4) dim=4900 logZ=-62.0439
+sector (4,5) dim=3920 logZ=-181.69
+sector (4,6) dim=1960 logZ=-374.88
+sector (4,7) dim=560 logZ=-590.814
+sector (4,8) dim=70 logZ=-905.798
+sector (5,0) dim=56 logZ=126.987
+sector (5,1) dim=448 logZ=81.7055
+sector (5,2) dim=1568 logZ=14.3177
+sector (5,3) dim=3136 logZ=-72.7995
+sector (5,4) dim=3920 logZ=-181.646
+sector (5,5) dim=3136 logZ=-312.312
+sector (5,6) dim=1568 logZ=-531.985
+sector (5,7) dim=448 logZ=-763.194
+sector (5,8) dim=56 logZ=-1095.94
+sector (6,0) dim=28 logZ=28.4356
+sector (6,1) dim=224 logZ=-36.5352
+sector (6,2) dim=784 logZ=-115.829
+sector (6,3) dim=1568 logZ=-231.631
+sector (6,4) dim=1960 logZ=-374.671
+sector (6,5) dim=1568 logZ=-531.962
+sector (6,6) dim=784 logZ=-759.672
+sector (6,7) dim=224 logZ=-1026.44
+sector (6,8) dim=28 logZ=-1381.64
+sector (7,0) dim=8 logZ=-79.7206
+sector (7,1) dim=64 logZ=-175.257
+sector (7,2) dim=224 logZ=-295.73
+sector (7,3) dim=448 logZ=-437.402
+sector (7,4) dim=560 logZ=-590.392
+sector (7,5) dim=448 logZ=-763.399
+sector (7,6) dim=224 logZ=-1026.51
+sector (7,7) dim=64 logZ=-1301.15
+sector (7,8) dim=8 logZ=-1677.04
+sector (8,0) dim=1 logZ=-288
+sector (8,1) dim=8 logZ=-418.434
+sector (8,2) dim=28 logZ=-566.545
+sector (8,3) dim=56 logZ=-729.484
+sector (8,4) dim=70 logZ=-905.798
+sector (8,5) dim=56 logZ=-1095.94
+sector (8,6) dim=28 logZ=-1381.64
+sector (8,7) dim=8 logZ=-1677.04
+sector (8,8) dim=1 logZ=-2072
+      190.40 real       187.90 user         1.27 sys
+            10780672  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                3274  page reclaims
+                   4  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  12  voluntary context switches
+              147085  involuntary context switches
+       4451382003493  instructions retired
+        771518446761  cycles elapsed
+            11715976  peak memory footprint

@@ -1,0 +1,17 @@
+---
+description: FTLM extended Hubbard — memory-first C++/Python conventions
+globs: "**/*.{hpp,h,cpp,cc,py,cmake,txt,md}"
+alwaysApply: true
+---
+
+# Project intent
+
+- Target **4×4** (16 sites) FTLM on ~**128 GB** RAM: **no dense Hamiltonians**, **no full spectrum storage**, **fixed small Lanczos workspace**.
+- Geometry: **square/rectangular** extended Hubbard (\(t, t', U, V\)); optional twists \(\phi_x,\phi_y\) like the prior [PeizhiMai/FTLM](https://github.com/PeizhiMai/FTLM) design.
+- Prefer **sparse `H|v>`** or on-the-fly connectivity; **symmetry blocks** (particle sectors + momentum when available) to reduce dimension.
+- Python: **pybind11** thin layer; heavy numerics stay in C++.
+- When porting from the old repo, **audit allocations**: peak memory should scale like **O(dim of largest block)** for a few vectors, not **O(samples × lanczos_steps × dim)** unless explicitly cached to disk with a budget.
+
+## Current codebase anchors
+
+- `FockBasis` + `apply_extended_hubbard` + `lanczos_extrema` are implemented; **FTLM thermodynamic estimators** are not yet (next milestone).
