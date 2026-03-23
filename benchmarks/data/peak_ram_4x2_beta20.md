@@ -7,7 +7,7 @@ Measured with macOS `/usr/bin/time -l` (BSD `time`).
 Command (representative):
 
 ```text
-./ftlm_bench_ftlm_nmu_rect --Lx=4 --Ly=2 --beta=20 --mu-min=-8 --mu-max=14 --n-mu=221 \
+./ftlm_bench_ftlm_nmu_rect --Lx=4 --Ly=2 --beta=20 --mu-min=-5 --mu-max=30 --n-mu=221 \
   --ftlm-random=16 --lanczos-steps=96 --seed=7 --out=.../n_vs_mu_4x2_beta20_ftlm.tsv
 ```
 

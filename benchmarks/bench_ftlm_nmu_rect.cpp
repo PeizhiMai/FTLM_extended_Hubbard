@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
   const int Ly = parse_int_arg(argc, argv, "Ly", 2);
   const double beta = parse_double_arg(argc, argv, "beta", 20.0);
   const double mu_min = parse_double_arg(argc, argv, "mu-min", -5.0);
-  const double mu_max = parse_double_arg(argc, argv, "mu-max", 20.0);
+  const double mu_max = parse_double_arg(argc, argv, "mu-max", 30.0);
   const int n_mu = std::max(2, parse_int_arg(argc, argv, "n-mu", 221));
   const int n_rand = parse_int_arg(argc, argv, "ftlm-random", 12);
   const int lz_steps = parse_int_arg(argc, argv, "lanczos-steps", 72);

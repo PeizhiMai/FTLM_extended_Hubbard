@@ -36,14 +36,3 @@ sector (3,1) dim=1200 logZ=155.814
 sector (3,2) dim=5400 logZ=169.808
 sector (3,3) dim=14400 logZ=161.182
 sector (3,4) dim=25200 logZ=130.756
-sector (3,5) dim=30240 logZ=70.0882
-sector (3,6) dim=25200 logZ=-8.48843
-sector (3,7) dim=14400 logZ=-117.947
-sector (3,8) dim=5400 logZ=-271.514
-sector (3,9) dim=1200 logZ=-516.922
-sector (3,10) dim=120 logZ=-787.288
-sector (4,0) dim=210 logZ=151.472
-sector (4,1) dim=2100 logZ=165.301
-sector (4,2) dim=9450 logZ=160.64
-sector (4,3) dim=25200 logZ=130.784
-sector (4,4) dim=44100 logZ=72.1919

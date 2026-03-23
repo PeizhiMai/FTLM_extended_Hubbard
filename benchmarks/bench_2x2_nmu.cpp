@@ -163,7 +163,7 @@ void grand_canonical_expectation(double beta, double mu, const std::vector<Level
 int main(int argc, char** argv) {
   const double beta = parse_double_arg(argc, argv, "beta", 20.0);
   const double mu_min = parse_double_arg(argc, argv, "mu-min", -5.0);
-  const double mu_max = parse_double_arg(argc, argv, "mu-max", 20.0);
+  const double mu_max = parse_double_arg(argc, argv, "mu-max", 30.0);
   const int n_mu = std::max(2, parse_int_arg(argc, argv, "n-mu", 221));
   const char* out_path = parse_string_arg(argc, argv, "out");
 
