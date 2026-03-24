@@ -25,6 +25,11 @@ inline RawState translate_raw_state(RawState s, int dx, int dy) {
   return RawState{translate_occupation_bits(s.up, dx, dy), translate_occupation_bits(s.dn, dx, dy)};
 }
 
+inline RawState translate_raw_state_rect(RawState s, int lx, int ly, int dx, int dy) {
+  return RawState{translate_occupation_bits_rect(s.up, lx, ly, dx, dy),
+                  translate_occupation_bits_rect(s.dn, lx, ly, dx, dy)};
+}
+
 inline RawState translate_raw_state_Tx(RawState s) {
   return RawState{translate_occupation_Tx(s.up), translate_occupation_Tx(s.dn)};
 }

@@ -7,6 +7,23 @@
 namespace ftlm {
 namespace symmetry {
 
+inline std::uint16_t translate_occupation_bits_rect(std::uint16_t bits, int lx, int ly, int dx, int dy) {
+  std::uint16_t out = 0;
+  for (int s = 0; s < lx * ly; ++s) {
+    if ((bits >> s) & 1u) {
+      const int x = s % lx;
+      const int y = s / lx;
+      int nx = (x + dx) % lx;
+      int ny = (y + dy) % ly;
+      if (nx < 0) nx += lx;
+      if (ny < 0) ny += ly;
+      const int t = ny * lx + nx;
+      out |= static_cast<std::uint16_t>(1u << t);
+    }
+  }
+  return out;
+}
+
 /// Translate a 16-bit occupation pattern as a **passive** relabeling of sites:
 /// an electron at site `s` moves to `Lattice4x4::translate_site_index(s, dx, dy)`.
 ///

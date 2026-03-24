@@ -62,7 +62,7 @@ def main() -> int:
     ap.add_argument("--U", type=float, default=5.75)
     ap.add_argument("--V", type=float, default=0.9)
     ap.add_argument("--mu-min", type=float, default=-5.0)
-    ap.add_argument("--mu-max", type=float, default=30.0)
+    ap.add_argument("--mu-max", type=float, default=25.0)
     ap.add_argument("--n-mu", type=int, default=221)
     ap.add_argument(
         "--cpp-tsv",

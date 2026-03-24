@@ -197,4 +197,48 @@ double ftlm_log_partition_real(int dim, const std::function<void(const double* x
   return std::log(static_cast<double>(dim)) + log_mean_br;
 }
 
+double ftlm_log_partition_complex(
+    int dim, const std::function<void(const std::complex<double>* x, std::complex<double>* y)>& apply_h,
+    double beta, const FtlmParams& par) {
+  if (dim <= 0) {
+    return -std::numeric_limits<double>::infinity();
+  }
+  if (dim == 1) {
+    std::complex<double> x[1] = {std::complex<double>(1.0, 0.0)};
+    std::complex<double> y[1] = {std::complex<double>(0.0, 0.0)};
+    apply_h(x, y);
+    return -beta * y[0].real();
+  }
+
+  const int R = std::max(1, par.n_random);
+  const int M = std::max(1, par.lanczos_steps);
+
+  std::vector<double> log_br;
+  log_br.reserve(static_cast<size_t>(R));
+  for (int r = 0; r < R; ++r) {
+    std::vector<double> alpha;
+    std::vector<double> beta_td;
+    const unsigned seed_r = par.seed + static_cast<unsigned>(r) * 100003u;
+    const int used = lanczos_tridiagonal(dim, apply_h, M, seed_r, &alpha, &beta_td);
+    if (used <= 0) {
+      continue;
+    }
+    log_br.push_back(log_lanczos_tridiagonal_quadrature_exp(alpha, beta_td, beta));
+  }
+  if (log_br.empty()) {
+    return -std::numeric_limits<double>::infinity();
+  }
+
+  double max_l = log_br[0];
+  for (double x : log_br) {
+    max_l = std::max(max_l, x);
+  }
+  double s = 0.0;
+  for (double x : log_br) {
+    s += std::exp(x - max_l);
+  }
+  const double log_mean_br = max_l + std::log(s / static_cast<double>(log_br.size()));
+  return std::log(static_cast<double>(dim)) + log_mean_br;
+}
+
 }  // namespace ftlm

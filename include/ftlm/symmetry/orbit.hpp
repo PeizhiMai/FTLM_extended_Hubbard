@@ -56,6 +56,24 @@ inline std::uint8_t primitive_period_ty(RawState s) {
   return 4;
 }
 
+inline std::uint8_t primitive_period_tx_rect(RawState s, int lx, int ly) {
+  for (int p = 1; p <= lx; ++p) {
+    if (translate_raw_state_rect(s, lx, ly, p, 0) == s) {
+      return static_cast<std::uint8_t>(p);
+    }
+  }
+  return static_cast<std::uint8_t>(lx);
+}
+
+inline std::uint8_t primitive_period_ty_rect(RawState s, int lx, int ly) {
+  for (int p = 1; p <= ly; ++p) {
+    if (translate_raw_state_rect(s, lx, ly, 0, p) == s) {
+      return static_cast<std::uint8_t>(p);
+    }
+  }
+  return static_cast<std::uint8_t>(ly);
+}
+
 /// Distinct images of `seed` under all 16 translations, sorted ascending by `pack_raw_state`.
 inline void enumerate_translation_orbit(RawState seed, std::vector<RawState>* out) {
   std::vector<std::uint32_t> packs;
@@ -72,10 +90,31 @@ inline void enumerate_translation_orbit(RawState seed, std::vector<RawState>* ou
   }
 }
 
+inline void enumerate_translation_orbit_rect(RawState seed, int lx, int ly, std::vector<RawState>* out) {
+  std::vector<std::uint32_t> packs;
+  packs.reserve(static_cast<std::size_t>(translation_group_order(lx, ly)));
+  for_each_translation_rect(lx, ly, [&](int dx, int dy) {
+    packs.push_back(pack_raw_state(translate_raw_state_rect(seed, lx, ly, dx, dy)));
+  });
+  std::sort(packs.begin(), packs.end());
+  packs.erase(std::unique(packs.begin(), packs.end()), packs.end());
+  out->clear();
+  out->reserve(packs.size());
+  for (std::uint32_t p : packs) {
+    out->push_back(unpack_raw_state(p));
+  }
+}
+
 /// Lexicographic minimum on packed `(up, dn)` within the orbit.
 inline RawState canonical_raw_state(RawState seed) {
   std::vector<RawState> orb;
   enumerate_translation_orbit(seed, &orb);
+  return *std::min_element(orb.begin(), orb.end(), RawStateLess{});
+}
+
+inline RawState canonical_raw_state_rect(RawState seed, int lx, int ly) {
+  std::vector<RawState> orb;
+  enumerate_translation_orbit_rect(seed, lx, ly, &orb);
   return *std::min_element(orb.begin(), orb.end(), RawStateLess{});
 }
 
@@ -98,6 +137,17 @@ inline std::vector<std::pair<std::int8_t, std::int8_t>> translation_stabilizer(R
   stab.reserve(16);
   for_each_translation_z4z4([&](int dx, int dy) {
     if (translate_raw_state(s, dx, dy) == s) {
+      stab.push_back({static_cast<std::int8_t>(dx), static_cast<std::int8_t>(dy)});
+    }
+  });
+  return stab;
+}
+
+inline std::vector<std::pair<std::int8_t, std::int8_t>> translation_stabilizer_rect(RawState s, int lx, int ly) {
+  std::vector<std::pair<std::int8_t, std::int8_t>> stab;
+  stab.reserve(static_cast<std::size_t>(translation_group_order(lx, ly)));
+  for_each_translation_rect(lx, ly, [&](int dx, int dy) {
+    if (translate_raw_state_rect(s, lx, ly, dx, dy) == s) {
       stab.push_back({static_cast<std::int8_t>(dx), static_cast<std::int8_t>(dy)});
     }
   });

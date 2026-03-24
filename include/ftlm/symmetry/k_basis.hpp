@@ -31,7 +31,12 @@ struct KBasis {
   static KBasis build(const MomentumSectorMap& map, MomentumSector Ksec) {
     KBasis b;
     b.K = Ksec;
+    b.K.lx = map.lx;
+    b.K.ly = map.ly;
     const std::size_t flat = static_cast<std::size_t>(Ksec.flat_index());
+    if (flat >= map.orbit_indices_by_momentum.size()) {
+      return b;
+    }
     b.rep_packed.reserve(map.orbit_indices_by_momentum[flat].size());
     for (std::size_t oi : map.orbit_indices_by_momentum[flat]) {
       b.rep_packed.push_back(pack_raw_state(map.orbits[oi].representative));

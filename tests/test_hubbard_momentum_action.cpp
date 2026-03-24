@@ -50,7 +50,7 @@ void test_single_particle_dispersion_4x4() {
       assert(basis.dim() == 1u);
       std::complex<double> x[1] = {std::complex<double>(1.0, 0.0)};
       std::complex<double> y[1] = {0.0};
-      hop.apply(map, K, basis, x, y);
+      hop.apply(map, K, 1, 0, x, y);
       const double eps = tight_binding_dispersion(kx, ky, p.t);
       assert(std::abs(y[0].real() - eps) < 1e-10);
       assert(std::abs(y[0].imag()) < 1e-10);
@@ -67,19 +67,20 @@ void test_onsite_u_diagonal_in_gamma() {
   p.V = 0.0;
   HubbardMomentumAction hub(p);
 
+  // One translation orbit with fixed (N_up, N_down) = (2, 0): two ↑ on neighboring sites.
+  // (Mixing different particle sectors in one map makes KBasis incompatible with a single FockBasis.)
   std::vector<RawState> seeds;
-  seeds.push_back({static_cast<std::uint16_t>(3u << 0), 0});  // sites 0,1 up — not double occ
-  seeds.push_back({1u << 0, 1u << 0});                        // double on site 0
+  seeds.push_back({static_cast<std::uint16_t>(3u << 0), 0});
   const MomentumSectorMap map = build_momentum_sector_map(std::move(seeds));
   const MomentumSector gamma{0, 0};
   const KBasis basis = KBasis::build(map, gamma);
-  assert(basis.dim() == 2u);
+  assert(basis.dim() == 1u);
 
   for (std::size_t j = 0; j < basis.dim(); ++j) {
     std::vector<std::complex<double>> x(basis.dim(), 0.0);
     std::vector<std::complex<double>> y(basis.dim(), 0.0);
     x[j] = 1.0;
-    hub.apply(map, gamma, basis, x.data(), y.data());
+    hub.apply(map, gamma, 2, 0, x.data(), y.data());
     const std::uint16_t ud =
         static_cast<std::uint16_t>(basis.representatives[j].up & basis.representatives[j].dn);
     int docc = 0;

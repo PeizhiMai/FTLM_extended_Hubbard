@@ -1,5 +1,6 @@
 #pragma once
 
+#include <complex>
 #include <functional>
 #include <vector>
 
@@ -22,5 +23,12 @@ struct FtlmParams {
 double ftlm_log_partition_real(int dim,
                                const std::function<void(const double* x, double* y)>& apply_real,
                                double beta, const FtlmParams& par);
+
+/// Stochastic estimate of \(\ln \mathrm{Tr}\,e^{-\beta H}\) for complex Hermitian \(H\), using
+/// Lanczos Gaussian quadrature on complex random starts (no reorthogonalization).
+double ftlm_log_partition_complex(
+    int dim,
+    const std::function<void(const std::complex<double>* x, std::complex<double>* y)>& apply_h,
+    double beta, const FtlmParams& par);
 
 }  // namespace ftlm

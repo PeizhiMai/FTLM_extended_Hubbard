@@ -32,10 +32,20 @@ add_library(ftlm_core STATIC
   src/hubbard_momentum_action.cpp
   src/lanczos.cpp
   src/ftlm_thermo.cpp
+  src/translation_projector_eigh.cpp
 )
 target_include_directories(ftlm_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+if(APPLE)
+  target_compile_definitions(ftlm_core PRIVATE ACCELERATE_NEW_LAPACK=1)
+  target_link_libraries(ftlm_core PUBLIC "-framework Accelerate")
+else()
+  find_library(FTLM_LAPACK_LIB NAMES lapack openblas)
+  if(FTLM_LAPACK_LIB)
+    target_link_libraries(ftlm_core PUBLIC ${FTLM_LAPACK_LIB})
+  endif()
+endif()
 
 add_executable(ftlm_cli src/main_cli.cpp)
 target_link_libraries(ftlm_cli PRIVATE ftlm_core)
@@ -49,6 +59,14 @@ if(FTLM_BUILD_BENCHMARKS)
   target_link_libraries(ftlm_bench_4x2_ftlm PRIVATE ftlm_core)
   add_executable(ftlm_bench_ftlm_nmu_rect benchmarks/bench_ftlm_nmu_rect.cpp)
   target_link_libraries(ftlm_bench_ftlm_nmu_rect PRIVATE ftlm_core)
+  add_executable(ftlm_bench_ftlm_nmu_rect_k benchmarks/bench_ftlm_nmu_4x4_k.cpp)
+  target_link_libraries(ftlm_bench_ftlm_nmu_rect_k PRIVATE ftlm_core)
+  add_executable(ftlm_bench_sector22_eigs benchmarks/bench_sector22_eigs_full_vs_k.cpp)
+  target_link_libraries(ftlm_bench_sector22_eigs PRIVATE ftlm_core)
+  add_executable(ftlm_diag_momentum_projector_2x2 benchmarks/diag_momentum_projector_2x2.cpp)
+  target_link_libraries(ftlm_diag_momentum_projector_2x2 PRIVATE ftlm_core)
+  add_executable(ftlm_diag_translation_compose_2x2 benchmarks/diag_translation_compose_2x2.cpp)
+  target_link_libraries(ftlm_diag_translation_compose_2x2 PRIVATE ftlm_core)
 endif()
 
 if(FTLM_BUILD_PYTHON)
@@ -99,4 +117,31 @@ if(FTLM_BUILD_TESTS)
   add_executable(ftlm_test_ftlm_thermo tests/test_ftlm_thermo.cpp)
   target_link_libraries(ftlm_test_ftlm_thermo PRIVATE ftlm_core)
   add_test(NAME ftlm_thermo COMMAND ftlm_test_ftlm_thermo)
+
+  add_executable(ftlm_test_momentum_partition_2x2 tests/test_momentum_partition_2x2.cpp)
+  target_link_libraries(ftlm_test_momentum_partition_2x2 PRIVATE ftlm_core)
+  add_test(NAME momentum_partition_2x2 COMMAND ftlm_test_momentum_partition_2x2)
+
+  add_executable(ftlm_test_momentum_trace_2x2 tests/test_momentum_trace_2x2.cpp)
+  target_link_libraries(ftlm_test_momentum_trace_2x2 PRIVATE ftlm_core)
+  add_test(NAME momentum_trace_2x2 COMMAND ftlm_test_momentum_trace_2x2)
+
+  add_executable(ftlm_test_momentum_logz_2x2 tests/test_momentum_logz_2x2.cpp)
+  target_link_libraries(ftlm_test_momentum_logz_2x2 PRIVATE ftlm_core)
+  add_test(NAME momentum_logz_2x2 COMMAND ftlm_test_momentum_logz_2x2)
+
+  add_executable(ftlm_test_momentum_refactor_debug_2x2 tests/test_momentum_refactor_debug_2x2.cpp)
+  target_link_libraries(ftlm_test_momentum_refactor_debug_2x2 PRIVATE ftlm_core)
+  add_test(NAME momentum_refactor_debug_2x2 COMMAND ftlm_test_momentum_refactor_debug_2x2)
+
+  add_executable(ftlm_test_momentum_hamiltonian_debug_2x2 tests/test_momentum_hamiltonian_debug_2x2.cpp)
+  target_link_libraries(ftlm_test_momentum_hamiltonian_debug_2x2 PRIVATE ftlm_core)
+  add_test(NAME momentum_hamiltonian_debug_2x2 COMMAND ftlm_test_momentum_hamiltonian_debug_2x2)
+
+  # Debug-only Gram-matrix reference for sector (0,2); not registered in CTest (diagnostic / may exit 1).
+  add_executable(ftlm_test_momentum_gram_debug_2x2_n0_n2 tests/test_momentum_gram_debug_2x2_n0_n2.cpp)
+  target_link_libraries(ftlm_test_momentum_gram_debug_2x2_n0_n2 PRIVATE ftlm_core)
+
+  add_executable(ftlm_test_momentum_action_k00_vs_ref_2x2_n02 tests/test_momentum_action_k00_vs_ref_2x2_n02.cpp)
+  target_link_libraries(ftlm_test_momentum_action_k00_vs_ref_2x2_n02 PRIVATE ftlm_core)
 endif()

@@ -35,7 +35,7 @@ def main() -> int:
     ap.add_argument("--ly", type=int, default=2)
     ap.add_argument("--beta", type=float, default=20.0)
     ap.add_argument("--mu-min", type=float, default=-5.0)
-    ap.add_argument("--mu-max", type=float, default=30.0)
+    ap.add_argument("--mu-max", type=float, default=25.0)
     ap.add_argument("--n-mu", type=int, default=221)
     ap.add_argument("--t", type=float, default=1.0)
     ap.add_argument("--tp", type=float, default=-0.35)
