@@ -13,12 +13,12 @@
 namespace ftlm {
 namespace {
 
-void jacobi_symmetric_all(std::vector<std::vector<double>>& A, std::vector<std::vector<double>>* V_out,
-                          int max_sweeps, double tol_offdiag) {
-  const int n = static_cast<int>(A.size());
-  V_out->assign(static_cast<size_t>(n), std::vector<double>(static_cast<size_t>(n), 0.0));
+/// Row-major `A[n*n]`, `V[n*n]` (starts as identity); matches the legacy `vector<vector<double>>` Jacobi.
+void jacobi_symmetric_all_flat(double* A, double* V, int n, int max_sweeps, double tol_offdiag) {
+  const size_t nn = static_cast<size_t>(n) * static_cast<size_t>(n);
+  std::fill(V, V + nn, 0.0);
   for (int i = 0; i < n; ++i) {
-    (*V_out)[static_cast<size_t>(i)][static_cast<size_t>(i)] = 1.0;
+    V[static_cast<size_t>(i) * static_cast<size_t>(n) + static_cast<size_t>(i)] = 1.0;
   }
   if (n <= 1) {
     return;
@@ -30,7 +30,7 @@ void jacobi_symmetric_all(std::vector<std::vector<double>>& A, std::vector<std::
     double max_abs = 0.0;
     for (int i = 0; i < n; ++i) {
       for (int j = i + 1; j < n; ++j) {
-        const double v = std::abs(A[static_cast<size_t>(i)][static_cast<size_t>(j)]);
+        const double v = std::abs(A[static_cast<size_t>(i) * static_cast<size_t>(n) + static_cast<size_t>(j)]);
         if (v > max_abs) {
           max_abs = v;
           p = i;
@@ -42,9 +42,9 @@ void jacobi_symmetric_all(std::vector<std::vector<double>>& A, std::vector<std::
       break;
     }
 
-    const double app = A[static_cast<size_t>(p)][static_cast<size_t>(p)];
-    const double aqq = A[static_cast<size_t>(q)][static_cast<size_t>(q)];
-    const double apq = A[static_cast<size_t>(p)][static_cast<size_t>(q)];
+    const double app = A[static_cast<size_t>(p) * static_cast<size_t>(n) + static_cast<size_t>(p)];
+    const double aqq = A[static_cast<size_t>(q) * static_cast<size_t>(n) + static_cast<size_t>(q)];
+    const double apq = A[static_cast<size_t>(p) * static_cast<size_t>(n) + static_cast<size_t>(q)];
     const double phi = 0.5 * std::atan2(2.0 * apq, aqq - app);
     const double c = std::cos(phi);
     const double s = std::sin(phi);
@@ -53,28 +53,28 @@ void jacobi_symmetric_all(std::vector<std::vector<double>>& A, std::vector<std::
       if (k == p || k == q) {
         continue;
       }
-      const double apk = A[static_cast<size_t>(p)][static_cast<size_t>(k)];
-      const double aqk = A[static_cast<size_t>(q)][static_cast<size_t>(k)];
+      const double apk = A[static_cast<size_t>(p) * static_cast<size_t>(n) + static_cast<size_t>(k)];
+      const double aqk = A[static_cast<size_t>(q) * static_cast<size_t>(n) + static_cast<size_t>(k)];
       const double rpk = c * apk - s * aqk;
       const double rqk = c * aqk + s * apk;
-      A[static_cast<size_t>(p)][static_cast<size_t>(k)] = rpk;
-      A[static_cast<size_t>(k)][static_cast<size_t>(p)] = rpk;
-      A[static_cast<size_t>(q)][static_cast<size_t>(k)] = rqk;
-      A[static_cast<size_t>(k)][static_cast<size_t>(q)] = rqk;
+      A[static_cast<size_t>(p) * static_cast<size_t>(n) + static_cast<size_t>(k)] = rpk;
+      A[static_cast<size_t>(k) * static_cast<size_t>(n) + static_cast<size_t>(p)] = rpk;
+      A[static_cast<size_t>(q) * static_cast<size_t>(n) + static_cast<size_t>(k)] = rqk;
+      A[static_cast<size_t>(k) * static_cast<size_t>(n) + static_cast<size_t>(q)] = rqk;
     }
 
     const double new_pp = c * c * app - 2.0 * s * c * apq + s * s * aqq;
     const double new_qq = s * s * app + 2.0 * s * c * apq + c * c * aqq;
-    A[static_cast<size_t>(p)][static_cast<size_t>(q)] = 0.0;
-    A[static_cast<size_t>(q)][static_cast<size_t>(p)] = 0.0;
-    A[static_cast<size_t>(p)][static_cast<size_t>(p)] = new_pp;
-    A[static_cast<size_t>(q)][static_cast<size_t>(q)] = new_qq;
+    A[static_cast<size_t>(p) * static_cast<size_t>(n) + static_cast<size_t>(q)] = 0.0;
+    A[static_cast<size_t>(q) * static_cast<size_t>(n) + static_cast<size_t>(p)] = 0.0;
+    A[static_cast<size_t>(p) * static_cast<size_t>(n) + static_cast<size_t>(p)] = new_pp;
+    A[static_cast<size_t>(q) * static_cast<size_t>(n) + static_cast<size_t>(q)] = new_qq;
 
     for (int i = 0; i < n; ++i) {
-      const double vip = (*V_out)[static_cast<size_t>(i)][static_cast<size_t>(p)];
-      const double viq = (*V_out)[static_cast<size_t>(i)][static_cast<size_t>(q)];
-      (*V_out)[static_cast<size_t>(i)][static_cast<size_t>(p)] = c * vip - s * viq;
-      (*V_out)[static_cast<size_t>(i)][static_cast<size_t>(q)] = s * vip + c * viq;
+      const double vip = V[static_cast<size_t>(i) * static_cast<size_t>(n) + static_cast<size_t>(p)];
+      const double viq = V[static_cast<size_t>(i) * static_cast<size_t>(n) + static_cast<size_t>(q)];
+      V[static_cast<size_t>(i) * static_cast<size_t>(n) + static_cast<size_t>(p)] = c * vip - s * viq;
+      V[static_cast<size_t>(i) * static_cast<size_t>(n) + static_cast<size_t>(q)] = s * vip + c * viq;
     }
   }
 }
@@ -90,25 +90,34 @@ double log_lanczos_tridiagonal_quadrature_exp(const std::vector<double>& alpha, 
     return -beta_temp * alpha[0];
   }
 
-  std::vector<std::vector<double>> T(static_cast<size_t>(n), std::vector<double>(static_cast<size_t>(n), 0.0));
+  // One contiguous pair of n×n buffers (reused across FTLM random starts) instead of nested vectors per call.
+  thread_local std::vector<double> T_flat;
+  thread_local std::vector<double> V_flat;
+  const size_t nn = static_cast<size_t>(n) * static_cast<size_t>(n);
+  if (T_flat.size() < nn) {
+    T_flat.resize(nn);
+  }
+  if (V_flat.size() < nn) {
+    V_flat.resize(nn);
+  }
+  std::fill(T_flat.begin(), T_flat.begin() + nn, 0.0);
   for (int i = 0; i < n; ++i) {
-    T[static_cast<size_t>(i)][static_cast<size_t>(i)] = alpha[static_cast<size_t>(i)];
+    T_flat[static_cast<size_t>(i) * static_cast<size_t>(n) + static_cast<size_t>(i)] = alpha[static_cast<size_t>(i)];
   }
   const int nb = static_cast<int>(beta.size());
   for (int i = 0; i < n - 1 && i < nb; ++i) {
     const double b = beta[static_cast<size_t>(i)];
-    T[static_cast<size_t>(i)][static_cast<size_t>(i + 1)] = b;
-    T[static_cast<size_t>(i + 1)][static_cast<size_t>(i)] = b;
+    T_flat[static_cast<size_t>(i) * static_cast<size_t>(n) + static_cast<size_t>(i + 1)] = b;
+    T_flat[static_cast<size_t>(i + 1) * static_cast<size_t>(n) + static_cast<size_t>(i)] = b;
   }
 
-  std::vector<std::vector<double>> V;
   const int max_sw = std::max(3000, 120 * n);
-  jacobi_symmetric_all(T, &V, max_sw, 1e-14);
+  jacobi_symmetric_all_flat(T_flat.data(), V_flat.data(), n, max_sw, 1e-14);
 
   double max_t = -std::numeric_limits<double>::infinity();
   for (int k = 0; k < n; ++k) {
-    const double lam = T[static_cast<size_t>(k)][static_cast<size_t>(k)];
-    const double c0k = V[0][static_cast<size_t>(k)];
+    const double lam = T_flat[static_cast<size_t>(k) * static_cast<size_t>(n) + static_cast<size_t>(k)];
+    const double c0k = V_flat[static_cast<size_t>(k)];  // row 0, col k
     const double w = c0k * c0k;
     if (w <= 0.0) {
       continue;
@@ -121,8 +130,8 @@ double log_lanczos_tridiagonal_quadrature_exp(const std::vector<double>& alpha, 
   }
   double sum = 0.0;
   for (int k = 0; k < n; ++k) {
-    const double lam = T[static_cast<size_t>(k)][static_cast<size_t>(k)];
-    const double c0k = V[0][static_cast<size_t>(k)];
+    const double lam = T_flat[static_cast<size_t>(k) * static_cast<size_t>(n) + static_cast<size_t>(k)];
+    const double c0k = V_flat[static_cast<size_t>(k)];
     const double w = c0k * c0k;
     if (w <= 0.0) {
       continue;

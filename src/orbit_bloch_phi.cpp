@@ -118,18 +118,19 @@ bool MomentumPhiGramBasis::build(const MomentumSectorMap& orbit_map, MomentumSec
     return false;
   }
 
-  std::vector<std::complex<double>> col_i(static_cast<std::size_t>(d));
-  std::vector<std::complex<double>> col_j(static_cast<std::size_t>(d));
   std::vector<std::complex<double>> g(static_cast<std::size_t>(k_in) * k_in, std::complex<double>(0.0, 0.0));
-
-  for (std::size_t i = 0; i < k_in; ++i) {
-    detail::fill_phi_orbit_bloch_from_seed(orbit_map, K, lx, ly, fb, out->seeds[i], col_i.data());
-    for (std::size_t j = i; j < k_in; ++j) {
-      detail::fill_phi_orbit_bloch_from_seed(orbit_map, K, lx, ly, fb, out->seeds[j], col_j.data());
-      const std::complex<double> s = dot_cols_conj_left(col_i.data(), col_j.data(), d);
-      g[static_cast<std::size_t>(i) + static_cast<std::size_t>(j) * k_in] = s;
-      if (i != j) {
-        g[static_cast<std::size_t>(j) + static_cast<std::size_t>(i) * k_in] = std::conj(s);
+  {
+    std::vector<std::complex<double>> col_i(static_cast<std::size_t>(d));
+    std::vector<std::complex<double>> col_j(static_cast<std::size_t>(d));
+    for (std::size_t i = 0; i < k_in; ++i) {
+      detail::fill_phi_orbit_bloch_from_seed(orbit_map, K, lx, ly, fb, out->seeds[i], col_i.data());
+      for (std::size_t j = i; j < k_in; ++j) {
+        detail::fill_phi_orbit_bloch_from_seed(orbit_map, K, lx, ly, fb, out->seeds[j], col_j.data());
+        const std::complex<double> s = dot_cols_conj_left(col_i.data(), col_j.data(), d);
+        g[static_cast<std::size_t>(i) + static_cast<std::size_t>(j) * k_in] = s;
+        if (i != j) {
+          g[static_cast<std::size_t>(j) + static_cast<std::size_t>(i) * k_in] = std::conj(s);
+        }
       }
     }
   }
@@ -174,6 +175,8 @@ bool MomentumPhiGramBasis::build(const MomentumSectorMap& orbit_map, MomentumSec
   for (std::size_t r = 0; r < out->k_out; ++r) {
     out->evals.push_back(evals_all[keep_idx[r]]);
   }
+  g.clear();
+  g.shrink_to_fit();
   return true;
 }
 

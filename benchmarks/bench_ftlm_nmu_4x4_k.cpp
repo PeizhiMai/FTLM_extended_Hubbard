@@ -338,6 +338,7 @@ int main(int argc, char** argv) {
         }
       }
       sector_k_scratch.shrink_after_sector();
+      lanczos_ws.shrink_to_fit();
       fpar.lanczos_ws = nullptr;
 
       logZ[static_cast<size_t>(idx)] = logZ_sector;

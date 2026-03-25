@@ -25,6 +25,13 @@ struct LanczosComplexWorkspace {
   std::size_t bytes_capacity() const {
     return (q.capacity() + q_prev.capacity() + w.capacity()) * sizeof(std::complex<double>);
   }
+
+  /// Return excess capacity to the allocator (e.g. after a sector’s largest k-block was processed).
+  void shrink_to_fit() {
+    q.shrink_to_fit();
+    q_prev.shrink_to_fit();
+    w.shrink_to_fit();
+  }
 };
 
 /// Smallest and largest eigenvalues of a Hermitian operator given only `apply(v, out)` with out = H v.
