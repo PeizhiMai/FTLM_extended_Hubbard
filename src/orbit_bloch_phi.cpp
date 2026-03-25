@@ -25,40 +25,42 @@ namespace ftlm {
 namespace symmetry {
 namespace {
 
-void zheev_full_hermitian_inplace(std::vector<std::complex<double>>* a_colmajor, int n, std::vector<double>* evals) {
+void zheev_full_hermitian_inplace(std::vector<std::complex<double>>* a_colmajor, int n, std::vector<double>* evals,
+                                  ZheevHermitianScratch* scratch) {
   if (n <= 0) {
     evals->clear();
     return;
   }
-  // Reused across calls (per thread) so repeated Gram diagonalizations do not allocate O(lwork) each time.
-  thread_local static std::vector<std::complex<double>> work_buf;
-  thread_local static std::vector<double> rwork_buf;
+  std::vector<std::complex<double>> local_work;
+  std::vector<double> local_rwork;
+  std::vector<std::complex<double>>* const work_buf = scratch ? &scratch->work : &local_work;
+  std::vector<double>* const rwork_buf = scratch ? &scratch->rwork : &local_rwork;
 #if defined(__APPLE__)
   char jobz = 'V';
   char uplo = 'U';
   __LAPACK_int nn = static_cast<__LAPACK_int>(n);
   __LAPACK_int lda = static_cast<__LAPACK_int>(n);
   evals->resize(static_cast<std::size_t>(n));
-  if (work_buf.size() < 1) {
-    work_buf.resize(1);
+  if (work_buf->size() < 1) {
+    work_buf->resize(1);
   }
   __LAPACK_int lwork = -1;
-  rwork_buf.resize(static_cast<std::size_t>(std::max(1, 3 * n - 2)));
+  rwork_buf->resize(static_cast<std::size_t>(std::max(1, 3 * n - 2)));
   __LAPACK_int info = 0;
   zheev_(&jobz, &uplo, &nn, reinterpret_cast<__LAPACK_double_complex*>(a_colmajor->data()), &lda, evals->data(),
-         reinterpret_cast<__LAPACK_double_complex*>(work_buf.data()), &lwork, rwork_buf.data(), &info);
+         reinterpret_cast<__LAPACK_double_complex*>(work_buf->data()), &lwork, rwork_buf->data(), &info);
   if (info != 0) {
     throw std::runtime_error("zheev workspace query failed (orbit_bloch_phi)");
   }
-  lwork = static_cast<__LAPACK_int>(std::llround(work_buf[0].real()));
+  lwork = static_cast<__LAPACK_int>(std::llround((*work_buf)[0].real()));
   if (lwork < 1) {
     lwork = 1;
   }
-  if (static_cast<std::size_t>(work_buf.size()) < static_cast<std::size_t>(lwork)) {
-    work_buf.resize(static_cast<std::size_t>(lwork));
+  if (static_cast<std::size_t>(work_buf->size()) < static_cast<std::size_t>(lwork)) {
+    work_buf->resize(static_cast<std::size_t>(lwork));
   }
   zheev_(&jobz, &uplo, &nn, reinterpret_cast<__LAPACK_double_complex*>(a_colmajor->data()), &lda, evals->data(),
-         reinterpret_cast<__LAPACK_double_complex*>(work_buf.data()), &lwork, rwork_buf.data(), &info);
+         reinterpret_cast<__LAPACK_double_complex*>(work_buf->data()), &lwork, rwork_buf->data(), &info);
   if (info != 0) {
     throw std::runtime_error("zheev failed (orbit_bloch_phi)");
   }
@@ -68,24 +70,24 @@ void zheev_full_hermitian_inplace(std::vector<std::complex<double>>* a_colmajor,
   int nn = n;
   int lda = n;
   evals->resize(static_cast<std::size_t>(n));
-  if (work_buf.size() < 1) {
-    work_buf.resize(1);
+  if (work_buf->size() < 1) {
+    work_buf->resize(1);
   }
   int lwork = -1;
-  rwork_buf.resize(static_cast<std::size_t>(std::max(1, 3 * n - 2)));
+  rwork_buf->resize(static_cast<std::size_t>(std::max(1, 3 * n - 2)));
   int info = 0;
-  zheev_(&jobz, &uplo, &nn, a_colmajor->data(), &lda, evals->data(), work_buf.data(), &lwork, rwork_buf.data(), &info);
+  zheev_(&jobz, &uplo, &nn, a_colmajor->data(), &lda, evals->data(), work_buf->data(), &lwork, rwork_buf->data(), &info);
   if (info != 0) {
     throw std::runtime_error("zheev workspace query failed (orbit_bloch_phi)");
   }
-  lwork = static_cast<int>(std::llround(work_buf[0].real()));
+  lwork = static_cast<int>(std::llround((*work_buf)[0].real()));
   if (lwork < 1) {
     lwork = 1;
   }
-  if (static_cast<std::size_t>(work_buf.size()) < static_cast<std::size_t>(lwork)) {
-    work_buf.resize(static_cast<std::size_t>(lwork));
+  if (static_cast<std::size_t>(work_buf->size()) < static_cast<std::size_t>(lwork)) {
+    work_buf->resize(static_cast<std::size_t>(lwork));
   }
-  zheev_(&jobz, &uplo, &nn, a_colmajor->data(), &lda, evals->data(), work_buf.data(), &lwork, rwork_buf.data(), &info);
+  zheev_(&jobz, &uplo, &nn, a_colmajor->data(), &lda, evals->data(), work_buf->data(), &lwork, rwork_buf->data(), &info);
   if (info != 0) {
     throw std::runtime_error("zheev failed (orbit_bloch_phi)");
   }
@@ -103,7 +105,7 @@ static std::complex<double> dot_cols_conj_left(const std::complex<double>* a, co
 }
 
 bool MomentumPhiGramBasis::build(const MomentumSectorMap& orbit_map, MomentumSector K, int lx, int ly,
-                                 const FockBasis& fb, MomentumPhiGramBasis* out) {
+                                 const FockBasis& fb, MomentumPhiGramBasis* out, ZheevHermitianScratch* zheev_scratch) {
   out->seeds = momentum_phi_seeds(orbit_map, K);
   out->d_full = fb.dim();
   out->lx = lx;
@@ -145,7 +147,7 @@ bool MomentumPhiGramBasis::build(const MomentumSectorMap& orbit_map, MomentumSec
   }
 
   std::vector<double> evals_all;
-  zheev_full_hermitian_inplace(&g, static_cast<int>(k_in), &evals_all);
+  zheev_full_hermitian_inplace(&g, static_cast<int>(k_in), &evals_all, zheev_scratch);
 
   double lam_max = 0.0;
   for (double ev : evals_all) {
@@ -308,7 +310,7 @@ void build_momentum_phi_orbit_orthonormal(const MomentumSectorMap& orbit_map, Mo
   }
 
   std::vector<double> evals;
-  zheev_full_hermitian_inplace(&g, static_cast<int>(k_in), &evals);
+  zheev_full_hermitian_inplace(&g, static_cast<int>(k_in), &evals, nullptr);
   double lam_max = 0.0;
   for (double ev : evals) {
     lam_max = std::max(lam_max, ev);

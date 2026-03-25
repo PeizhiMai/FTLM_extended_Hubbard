@@ -1,0 +1,39 @@
+# Step 1 — thread_local audit (k-bench and dependencies)
+# No code changes in this step.
+
+## src/orbit_bloch_phi.cpp
+1) zheev_full_hermitian_inplace
+   - thread_local static std::vector<std::complex<double>> work_buf
+   - thread_local static std::vector<double> rwork_buf
+   - Growth: work_buf resized to optimal lwork from zheev workspace query (grows with max n=k_in seen); never shrinks.
+   - Lifetime: entire thread (process for single-threaded bench).
+
+2) MomentumPhiGramBasis::project_block_from_full (scratch == nullptr path)
+   - thread_local tl_a, tl_col
+   - Growth: a to k_in, col to d_full; capacity = high-water per thread.
+
+3) MomentumPhiGramBasis::lift_full_from_block (scratch == nullptr path)
+   - thread_local tl_w, tl_col
+   - Growth: w to k_in, col to d_full.
+
+## src/ftlm_thermo.cpp
+4) log_lanczos_tridiagonal_quadrature_exp
+   - thread_local std::vector<double> T_flat
+   - thread_local std::vector<double> V_flat
+   - Growth: nn = n*n where n = Lanczos steps used (≤ lanczos_steps); grows to max n seen; never shrinks.
+
+## src/lanczos.cpp — lanczos_tridiagonal (ws == nullptr)
+5) thread_local tl_q, tl_q_prev, tl_w
+   - Growth: dim-sized; high-water max dim per thread.
+   - k-bench passes LanczosComplexWorkspace, so this path is NOT used for FTLM in bench.
+
+## src/hubbard_momentum_action.cpp — HubbardMomentumBlock::apply (scratch == nullptr)
+6) thread_local tl_vin, tl_wout
+   - k-bench uses MomentumBlockScratch; NOT used on main path.
+
+## Summary for k-bench hot path
+- zheev work_buf / rwork_buf (every Gram build)
+- T_flat / V_flat (every FTLM random start, quadrature)
+- Lanczos uses explicit LanczosComplexWorkspace (not thread_local in bench)
+- HubbardMomentumBlock uses MomentumBlockScratch (not thread_local in bench)
+- project/lift use gram_apply scratch (not thread_local in bench)

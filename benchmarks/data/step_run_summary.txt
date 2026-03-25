@@ -1,0 +1,31 @@
+# Memory refactor steps — 3x2 verification log (session)
+
+## Baseline (Step 0) — benchmarks/data/baseline_3x2_step0.txt
+Numerics: max|nonmom-ED|=1.324e-02  max|k-ED|=1.384e-02  max|nonmom-k|=1.395e-02
+FTLM k-blocks METRIC: peak_RSS_MiB ~44.66  peak_RSS_bytes ~4.68e+07
+
+## Step 1 — thread_local audit only
+File: benchmarks/data/thread_local_audit_step1.txt
+Numerics unchanged (plot re-run on same TSVs).
+
+## Step 2 — zheev: ZheevHermitianScratch on MomentumBlockScratch; no thread_local in zheev_full_hermitian_inplace
+Numerics: MATCH baseline.
+k peak RSS (representative run): ~43.2 MiB (METRIC from step2_zheev_scratch_run.log)
+
+## Step 3 — quadrature: FtlmTridiagonalQuadratureScratch + FtlmParams::quad_scratch; k-bench wired
+Numerics: MATCH baseline.
+k peak RSS: ~42.85 MiB (step3_quad_scratch_run.log)
+
+## Step 4 — shrink_after_sector includes zheev; sector_quad_scratch.shrink_to_fit in k-bench
+Numerics: MATCH baseline.
+k peak RSS: ~41.89 MiB (step4_sector_shrink_run.log)
+
+## Step 5 — --mem-instrument=1 on ftlm_bench_ftlm_nmu_rect_k
+Numerics: MATCH baseline (step5_final_run.log).
+k peak RSS (METRIC): ~41.9 MiB
+
+## CLI
+  ./ftlm_bench_ftlm_nmu_rect_k ... --mem-instrument=1
+
+## Git
+Single commit recommended message: scratch ownership for zheev + FTLM quadrature; sector shrink; k-bench instrumentation.

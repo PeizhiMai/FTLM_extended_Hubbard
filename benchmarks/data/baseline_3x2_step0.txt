@@ -1,0 +1,15 @@
+# Step 0 baseline — 3x2 three-way monitoring (reference for numerics + RSS)
+# Generated: run benchmarks/run_3x2_three_way_monitoring.sh
+
+## Numerics (must match after each refactor)
+max|nonmom-ED| = 1.324e-02
+max|k-ED|       = 1.384e-02
+max|nonmom-k|   = 1.395e-02
+
+## METRIC peak RSS (C++ getrusage, from monitoring log / plot summary)
+FTLM_nmu_rect:   wall_time_s ~6.48  peak_RSS_MiB ~5.45  peak_RSS_bytes ~5.71e+06
+FTLM_nmu_rect_k: wall_time_s ~15.5  peak_RSS_MiB ~44.66 peak_RSS_bytes ~4.68e+07
+
+## Notes
+- Full tee: benchmarks/data/baseline_3x2_step0_run.log
+- Monitoring tee: benchmarks/data/n_vs_mu_3x2_beta20_three_way_monitoring.txt

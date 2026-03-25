@@ -52,6 +52,7 @@ struct MomentumBlockScratch {
   std::vector<std::complex<double>> vin{};
   std::vector<std::complex<double>> wout{};
   MomentumPhiGramApplyScratch gram_apply{};
+  ZheevHermitianScratch zheev{};
   void ensure_d_full(int d) {
     const auto u = static_cast<std::size_t>(d);
     vin.resize(u);
@@ -64,6 +65,7 @@ struct MomentumBlockScratch {
     wout.clear();
     wout.shrink_to_fit();
     gram_apply.shrink_to_fit();
+    zheev.shrink_to_fit();
   }
 };
 
@@ -83,6 +85,9 @@ struct HubbardMomentumBlock {
   HubbardMomentumBlock& operator=(HubbardMomentumBlock&&) = default;
 
   std::size_t dim() const noexcept { return dk_; }
+
+  /// Raw Bloch seed count for this block (Gram size \(k_{\mathrm{in}}\times k_{\mathrm{in}}\) before dropping modes).
+  std::size_t gram_k_in() const noexcept { return gram_.k_in; }
 
   void apply(const std::complex<double>* x, std::complex<double>* y) const;
 

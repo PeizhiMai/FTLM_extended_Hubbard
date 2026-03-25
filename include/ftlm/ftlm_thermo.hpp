@@ -8,6 +8,16 @@
 
 namespace ftlm {
 
+/// Reusable dense Jacobi buffers for `log_lanczos_tridiagonal_quadrature_exp` (replaces thread_local T/V flats).
+struct FtlmTridiagonalQuadratureScratch {
+  std::vector<double> T_flat{};
+  std::vector<double> V_flat{};
+  void shrink_to_fit() {
+    T_flat.shrink_to_fit();
+    V_flat.shrink_to_fit();
+  }
+};
+
 /// Controls stochastic Lanczos depth for FTLM-style canonical traces (real-symmetric H).
 struct FtlmParams {
   int n_random = 16;
@@ -17,6 +27,8 @@ struct FtlmParams {
   /// (and callers can size once per sector to max block dimension). `ftlm_log_partition_real` may also use it
   /// for the internal complex Lanczos path.
   LanczosComplexWorkspace* lanczos_ws = nullptr;
+  /// If non-null, tridiagonal quadrature Jacobi uses these \(n\times n\) reals (one per sector in k-bench).
+  FtlmTridiagonalQuadratureScratch* quad_scratch = nullptr;
 };
 
 /// Stochastic estimate of \(\ln \mathrm{Tr}\,e^{-\beta H}\) for **real-symmetric** \(H\), using

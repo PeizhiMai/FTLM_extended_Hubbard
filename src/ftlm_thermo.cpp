@@ -81,7 +81,7 @@ void jacobi_symmetric_all_flat(double* A, double* V, int n, int max_sweeps, doub
 
 /// \(\ln \sum_k |V_{0k}|^2 \exp(-\beta \lambda_k)\) (log-sum-exp) for Lanczos tridiagonal.
 double log_lanczos_tridiagonal_quadrature_exp(const std::vector<double>& alpha, const std::vector<double>& beta,
-                                               double beta_temp) {
+                                               double beta_temp, FtlmTridiagonalQuadratureScratch* scratch) {
   const int n = static_cast<int>(alpha.size());
   if (n <= 0) {
     return -std::numeric_limits<double>::infinity();
@@ -90,9 +90,12 @@ double log_lanczos_tridiagonal_quadrature_exp(const std::vector<double>& alpha, 
     return -beta_temp * alpha[0];
   }
 
-  // One contiguous pair of n×n buffers (reused across FTLM random starts) instead of nested vectors per call.
-  thread_local std::vector<double> T_flat;
-  thread_local std::vector<double> V_flat;
+  std::vector<double> local_T;
+  std::vector<double> local_V;
+  std::vector<double>* T_ptr = scratch ? &scratch->T_flat : &local_T;
+  std::vector<double>* V_ptr = scratch ? &scratch->V_flat : &local_V;
+  std::vector<double>& T_flat = *T_ptr;
+  std::vector<double>& V_flat = *V_ptr;
   const size_t nn = static_cast<size_t>(n) * static_cast<size_t>(n);
   if (T_flat.size() < nn) {
     T_flat.resize(nn);
@@ -189,7 +192,7 @@ double ftlm_log_partition_real(int dim, const std::function<void(const double* x
     if (used <= 0) {
       continue;
     }
-    log_br.push_back(log_lanczos_tridiagonal_quadrature_exp(alpha, beta_td, beta));
+    log_br.push_back(log_lanczos_tridiagonal_quadrature_exp(alpha, beta_td, beta, par.quad_scratch));
   }
   if (log_br.empty()) {
     return -std::numeric_limits<double>::infinity();
@@ -234,7 +237,7 @@ double ftlm_log_partition_complex(
     if (used <= 0) {
       continue;
     }
-    log_br.push_back(log_lanczos_tridiagonal_quadrature_exp(alpha, beta_td, beta));
+    log_br.push_back(log_lanczos_tridiagonal_quadrature_exp(alpha, beta_td, beta, par.quad_scratch));
   }
   if (log_br.empty()) {
     return -std::numeric_limits<double>::infinity();

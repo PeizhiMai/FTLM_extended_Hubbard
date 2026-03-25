@@ -123,6 +123,16 @@ void build_momentum_phi_orbit_orthonormal(const MomentumSectorMap& orbit_map, Mo
                                           const FockBasis& fb, std::vector<std::complex<double>>* phi_column_major,
                                           std::size_t* dk_out);
 
+/// LAPACK `zheev` workspace reused across Gram builds (replaces unbounded `thread_local` in `zheev_full_hermitian_inplace`).
+struct ZheevHermitianScratch {
+  std::vector<std::complex<double>> work{};
+  std::vector<double> rwork{};
+  void shrink_to_fit() {
+    work.shrink_to_fit();
+    rwork.shrink_to_fit();
+  }
+};
+
 /// Reusable temporaries for `MomentumPhiGramBasis::project_block_from_full` / `lift_full_from_block` (avoids
 /// unbounded `thread_local` growth when iterating many momentum sectors).
 struct MomentumPhiGramApplyScratch {
@@ -161,8 +171,9 @@ struct MomentumPhiGramBasis {
   std::size_t k_out = 0;
 
   /// Build Gram data from orbit Bloch seeds. Returns false if the block is empty.
+  /// If `zheev_scratch` is non-null, LAPACK workspace is stored there; otherwise local buffers are used (tests / one-off).
   static bool build(const MomentumSectorMap& orbit_map, MomentumSector K, int lx, int ly, const FockBasis& fb,
-                    MomentumPhiGramBasis* out);
+                    MomentumPhiGramBasis* out, ZheevHermitianScratch* zheev_scratch = nullptr);
 
   /// `y_block = Φ† x_full` (block length `k_out`).
   void project_block_from_full(const MomentumSectorMap& orbit_map, MomentumSector K, const FockBasis& fb,

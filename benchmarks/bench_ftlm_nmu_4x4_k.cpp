@@ -237,6 +237,7 @@ int main(int argc, char** argv) {
   const int mem_report = parse_int_arg(argc, argv, "mem-report", 0);
   const int mem_report_detail = parse_int_arg(argc, argv, "mem-report-detail", 0);
   const int lanczos_ws_report = parse_int_arg(argc, argv, "lanczos-ws-report", 0);
+  const int mem_instrument = parse_int_arg(argc, argv, "mem-instrument", 0);
 #if !defined(_WIN32)
   if (mem_report_detail != 0) {
     (void)setenv("FTLM_MEM_REPORT_DETAIL", "1", 1);
@@ -274,6 +275,7 @@ int main(int argc, char** argv) {
 
   const auto t0 = clock::now();
   ftlm::symmetry::HubbardMomentumAction hub(p);
+  double rss_peak_run = 0.0;
   for (int nu = 0; nu <= n_sites; ++nu) {
     for (int nd = 0; nd <= n_sites; ++nd) {
       const int idx = sector_index(nu, nd, n_sites);
@@ -292,21 +294,26 @@ int main(int argc, char** argv) {
       }
 
       const auto map = ftlm::symmetry::build_momentum_sector_map_rect(std::move(universe), Lx, Ly);
+      const double rss_before_sector = peak_rss_bytes_self();
       double logZ_sector = -std::numeric_limits<double>::infinity();
       int dim_k_total = 0;
       int n_ed_blocks = 0;
       int n_ftlm_blocks = 0;
+      std::size_t max_k_in_sector = 0;
       // One scratch shared across all K for this (nu,nd): only one HubbardMomentumBlock alive at a time.
       ftlm::symmetry::MomentumBlockScratch sector_k_scratch;
       ftlm::LanczosComplexWorkspace lanczos_ws;
+      ftlm::FtlmTridiagonalQuadratureScratch sector_quad_scratch;
       // Size follows each k-block dim (ftlm_log_partition_complex → lanczos_tridiagonal → ensure(dk)), not dim_full.
       fpar.lanczos_ws = &lanczos_ws;
+      fpar.quad_scratch = &sector_quad_scratch;
       for (int ky = 0; ky < Ly; ++ky) {
         for (int kx = 0; kx < Lx; ++kx) {
           const ftlm::symmetry::MomentumSector K{kx, ky, Lx, Ly};
           const auto kb = ftlm::symmetry::KBasis::build(map, K);
           ftlm::symmetry::HubbardMomentumBlock kblock(hub, map, K, nu, nd, &sector_k_scratch);
           const int dk = static_cast<int>(kblock.dim());
+          max_k_in_sector = std::max(max_k_in_sector, kblock.gram_k_in());
           if (mem_report != 0) {
             max_gram_storage_bytes = std::max(max_gram_storage_bytes, kblock.phi_bytes());
           }
@@ -339,7 +346,27 @@ int main(int argc, char** argv) {
       }
       sector_k_scratch.shrink_after_sector();
       lanczos_ws.shrink_to_fit();
+      sector_quad_scratch.shrink_to_fit();
       fpar.lanczos_ws = nullptr;
+      fpar.quad_scratch = nullptr;
+
+      const double rss_after_sector = peak_rss_bytes_self();
+      rss_peak_run = std::max(rss_peak_run, rss_after_sector);
+      if (mem_instrument != 0) {
+        const std::size_t zwc = sector_k_scratch.zheev.work.capacity();
+        const std::size_t zrwc = sector_k_scratch.zheev.rwork.capacity();
+        std::cerr << "[mem-instr] sector(" << nu << "," << nd << ") idx=" << idx << " max_k_in=" << max_k_in_sector
+                  << " zheev_work_cap_B=" << (zwc * sizeof(std::complex<double>))
+                  << " zheev_work_size=" << sector_k_scratch.zheev.work.size()
+                  << " zheev_rwork_cap_B=" << (zrwc * sizeof(double))
+                  << " zheev_rwork_size=" << sector_k_scratch.zheev.rwork.size()
+                  << " quad_T_cap_B=" << (sector_quad_scratch.T_flat.capacity() * sizeof(double))
+                  << " quad_T_size=" << sector_quad_scratch.T_flat.size()
+                  << " quad_V_cap_B=" << (sector_quad_scratch.V_flat.capacity() * sizeof(double))
+                  << " quad_V_size=" << sector_quad_scratch.V_flat.size()
+                  << " lanczos_pool_B=" << lanczos_ws.bytes_capacity() << " rss_before_B=" << rss_before_sector
+                  << " rss_after_B=" << rss_after_sector << " peak_run_B=" << rss_peak_run << "\n";
+      }
 
       logZ[static_cast<size_t>(idx)] = logZ_sector;
       std::cerr << "sector (" << nu << "," << nd << ") dim_full=" << dim_full << " dim_k_total=" << dim_k_total
@@ -349,6 +376,10 @@ int main(int argc, char** argv) {
   }
   const double t_sectors = std::chrono::duration<double>(clock::now() - t0).count();
   std::cout << "[timing] all sectors logZ: " << t_sectors << " s\n";
+  if (mem_instrument != 0) {
+    std::cout << "[mem-instr] rss_peak_run_B=" << rss_peak_run << " rss_peak_run_MiB=" << (rss_peak_run / (1024.0 * 1024.0))
+              << "\n";
+  }
 
   std::ostream* out = &std::cout;
   std::ofstream file;
