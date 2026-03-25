@@ -23,7 +23,7 @@
 #include "ftlm/symmetry/orbit.hpp"
 #include "ftlm/symmetry/packed_raw_state.hpp"
 #include "ftlm/symmetry/raw_state.hpp"
-#include "ftlm/symmetry/translation_projector_dense.hpp"
+#include "ftlm/symmetry/orbit_bloch_phi.hpp"
 
 namespace {
 
@@ -447,14 +447,14 @@ int main() {
         continue;
       }
 
-      std::cout << "\n========== K=(" << kx << "," << ky << "), dense P_k rank dk=" << dk
+      std::cout << "\n========== K=(" << kx << "," << ky << "), orbit+GS dk=" << dk
                 << " (KBasis.dim=" << kb.dim() << ") ==========\n";
 
       std::vector<std::complex<double>> phi_cm;
       std::size_t dk_phi = 0;
-      ftlm::symmetry::detail::build_phi_from_translation_projector_dense(fb, Lx, Ly, K, &phi_cm, &dk_phi);
+      ftlm::symmetry::build_momentum_phi_orbit_orthonormal(map, K, Lx, Ly, fb, &phi_cm, &dk_phi);
       if (static_cast<int>(dk_phi) != dk) {
-        std::cerr << "Gram debug: dk mismatch build_phi vs momentum_block_dim\n";
+        std::cerr << "Gram debug: dk mismatch orbit phi vs momentum_block_dim\n";
         return 2;
       }
       std::vector<std::vector<std::complex<double>>> Phi(
@@ -465,7 +465,7 @@ int main() {
               phi_cm[static_cast<size_t>(i) + static_cast<size_t>(j) * static_cast<size_t>(dim_full)];
         }
       }
-      std::cout << "[Step 2–3] Phi columns = orthonormal spectral basis of Hermitian P_k (production path).\n";
+      std::cout << "[Step 2–3] Phi columns = orbit Bloch + Gram–Schmidt (production path).\n";
 
       // Step 3: Gram matrix G = Phi^H Phi
       std::vector<std::vector<std::complex<double>>> G(static_cast<size_t>(dk),

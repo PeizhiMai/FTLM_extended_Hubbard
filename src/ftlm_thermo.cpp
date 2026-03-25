@@ -175,7 +175,8 @@ double ftlm_log_partition_real(int dim, const std::function<void(const double* x
     std::vector<double> alpha;
     std::vector<double> beta_td;
     const unsigned seed_r = par.seed + static_cast<unsigned>(r) * 100003u;
-    const int used = lanczos_tridiagonal(dim, apply_c, M, seed_r, &alpha, &beta_td);
+    const int used =
+        lanczos_tridiagonal(dim, apply_c, M, seed_r, &alpha, &beta_td, par.lanczos_ws);
     if (used <= 0) {
       continue;
     }
@@ -219,7 +220,8 @@ double ftlm_log_partition_complex(
     std::vector<double> alpha;
     std::vector<double> beta_td;
     const unsigned seed_r = par.seed + static_cast<unsigned>(r) * 100003u;
-    const int used = lanczos_tridiagonal(dim, apply_h, M, seed_r, &alpha, &beta_td);
+    const int used =
+        lanczos_tridiagonal(dim, apply_h, M, seed_r, &alpha, &beta_td, par.lanczos_ws);
     if (used <= 0) {
       continue;
     }

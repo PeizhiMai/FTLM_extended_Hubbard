@@ -30,9 +30,9 @@ add_library(ftlm_core STATIC
   src/fock_basis.cpp
   src/hubbard_hamiltonian.cpp
   src/hubbard_momentum_action.cpp
+  src/orbit_bloch_phi.cpp
   src/lanczos.cpp
   src/ftlm_thermo.cpp
-  src/translation_projector_eigh.cpp
 )
 target_include_directories(ftlm_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -67,6 +67,14 @@ if(FTLM_BUILD_BENCHMARKS)
   target_link_libraries(ftlm_diag_momentum_projector_2x2 PRIVATE ftlm_core)
   add_executable(ftlm_diag_translation_compose_2x2 benchmarks/diag_translation_compose_2x2.cpp)
   target_link_libraries(ftlm_diag_translation_compose_2x2 PRIVATE ftlm_core)
+  add_executable(ftlm_phi_compare_dense_vs_orbit benchmarks/phi_compare_dense_vs_orbit.cpp)
+  target_link_libraries(ftlm_phi_compare_dense_vs_orbit PRIVATE ftlm_core)
+  add_executable(ftlm_diag_orbit_pk_column_trace benchmarks/diag_orbit_pk_column_trace.cpp)
+  target_link_libraries(ftlm_diag_orbit_pk_column_trace PRIVATE ftlm_core)
+  if(APPLE)
+    target_link_libraries(ftlm_phi_compare_dense_vs_orbit PRIVATE "-framework Accelerate")
+    target_link_libraries(ftlm_diag_orbit_pk_column_trace PRIVATE "-framework Accelerate")
+  endif()
 endif()
 
 if(FTLM_BUILD_PYTHON)
@@ -144,4 +152,8 @@ if(FTLM_BUILD_TESTS)
 
   add_executable(ftlm_test_momentum_action_k00_vs_ref_2x2_n02 tests/test_momentum_action_k00_vs_ref_2x2_n02.cpp)
   target_link_libraries(ftlm_test_momentum_action_k00_vs_ref_2x2_n02 PRIVATE ftlm_core)
+
+  add_executable(ftlm_test_momentum_phi_matrix_free tests/test_momentum_phi_matrix_free.cpp)
+  target_link_libraries(ftlm_test_momentum_phi_matrix_free PRIVATE ftlm_core)
+  add_test(NAME momentum_phi_matrix_free COMMAND ftlm_test_momentum_phi_matrix_free)
 endif()

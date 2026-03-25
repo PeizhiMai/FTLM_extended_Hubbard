@@ -4,6 +4,7 @@
 #include <functional>
 #include <limits>
 #include <random>
+#include <utility>
 #include <vector>
 
 namespace ftlm {
@@ -124,19 +125,44 @@ std::pair<double, double> tridiagonal_extrema(const std::vector<double>& alpha,
 int lanczos_tridiagonal(
     int dim,
     const std::function<void(const std::complex<double>* v, std::complex<double>* Hv)>& apply_h,
-    int max_steps, unsigned seed, std::vector<double>* alpha, std::vector<double>* beta) {
+    int max_steps, unsigned seed, std::vector<double>* alpha, std::vector<double>* beta,
+    LanczosComplexWorkspace* ws) {
   alpha->clear();
   beta->clear();
   if (dim <= 0 || max_steps <= 0) {
     return 0;
   }
+  alpha->reserve(static_cast<size_t>(max_steps));
+  if (max_steps > 1) {
+    beta->reserve(static_cast<size_t>(max_steps - 1));
+  }
 
   std::mt19937 rng(seed);
   std::normal_distribution<double> gauss(0.0, 1.0);
 
-  std::vector<std::complex<double>> q(static_cast<size_t>(dim));
-  std::vector<std::complex<double>> q_prev(static_cast<size_t>(dim), std::complex<double>(0.0, 0.0));
-  std::vector<std::complex<double>> w(static_cast<size_t>(dim));
+  thread_local std::vector<std::complex<double>> tl_q;
+  thread_local std::vector<std::complex<double>> tl_q_prev;
+  thread_local std::vector<std::complex<double>> tl_w;
+
+  std::vector<std::complex<double>>* p_q = nullptr;
+  std::vector<std::complex<double>>* p_qp = nullptr;
+  std::vector<std::complex<double>>* p_w = nullptr;
+  if (ws != nullptr) {
+    ws->ensure(dim);
+    p_q = &ws->q;
+    p_qp = &ws->q_prev;
+    p_w = &ws->w;
+  } else {
+    tl_q.resize(static_cast<size_t>(dim));
+    tl_q_prev.assign(static_cast<size_t>(dim), std::complex<double>(0.0, 0.0));
+    tl_w.resize(static_cast<size_t>(dim));
+    p_q = &tl_q;
+    p_qp = &tl_q_prev;
+    p_w = &tl_w;
+  }
+  std::vector<std::complex<double>>& q = *p_q;
+  std::vector<std::complex<double>>& q_prev = *p_qp;
+  std::vector<std::complex<double>>& w = *p_w;
 
   for (int i = 0; i < dim; ++i) {
     q[static_cast<size_t>(i)] = {gauss(rng), gauss(rng)};
@@ -171,7 +197,7 @@ int lanczos_tridiagonal(
     }
     const double b_k = std::sqrt(nw2);
     beta->push_back(b_k);
-    q_prev = q;
+    std::swap(q, q_prev);
     for (int i = 0; i < dim; ++i) {
       q[static_cast<size_t>(i)] = w[static_cast<size_t>(i)] / b_k;
     }

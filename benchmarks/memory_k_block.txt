@@ -1,0 +1,68 @@
+K-block momentum path: peak memory accounting (reference)
+
+Production k-block (`HubbardMomentumBlock`, Mar 2026+)
+- **No** dense Φ array: `MomentumPhiGramBasis` stores seeds + Hermitian Gram eigenvectors V (k_in × k_in) and evals.
+  Lift/project apply raw Bloch columns on the fly (same numerics as legacy `build_momentum_phi_orbit_orthonormal`).
+- Persistent storage is O(k_in²) complex for V, not O(d_full·d_k). When many raw seeds are Gram-dropped (k_in ≫ d_k),
+  V can be **larger** than the old compact Φ — acceptable to remove any d_full×d_k resident buffer.
+- Apply uses O(d_full) scratch for one Bloch column + full-sector vin/wout (same as before), plus O(k_in) mixing vectors.
+
+When is RSS lower than non-momentum FTLM?
+- Non-momentum Lanczos keeps only three length-d complex vectors (O(d)) plus tiny tridiagonal buffers.
+- k-block avoids **d_full×d_k** Φ but still pays zheev workspace during Gram build, V storage, and allocator effects.
+- Peak RSS vs nomom depends on system size and k_in; compare runs with `--mem-report=1` on `ftlm_bench_ftlm_nmu_rect_k`.
+
+Dominant terms (per HubbardMomentumBlock while it exists)
+- Phi storage: O(d_full * d_k) complex = phi_bytes() = 16 * d_full * d_k bytes.
+  This is the irreducible cost of storing the Bloch basis for y = Phi^dagger H Phi x.
+- FockBasis + hub pointers: O(1) metadata; FockBasis holds sector bookkeeping (small vs Hilbert size).
+
+Per-apply scratch (lift / H|psi> in full space)
+- vin, wout: O(d_full) each, shared via MomentumBlockScratch in k-bench / sector22, or thread_local
+  when scratch is null (e.g. HubbardMomentumAction::apply one-off, Lanczos helpers).
+
+Phi construction (in ftlm_core; no dense P_k, no LAPACK)
+- For each (sector, K): columns are orbit Bloch sums (one per KBasis representative), then modified Gram–Schmidt with
+  linearly dependent columns dropped. Memory is O(d_full * d_k) for Φ plus O(d_k * d_full) transient work during GS
+  (small column workspace). `HubbardMomentumAction::momentum_block_dim` runs the same construction to return the
+  post–Gram–Schmidt column count (may be < KBasis::dim() if representatives were dependent).
+
+Optional diagnostics (not linked into ftlm_core)
+- `include/ftlm/symmetry/translation_projector_dense.hpp` still defines dense U(R) and P_k for benchmark/diag tools only.
+
+Other allocations (not in HubbardMomentumBlock)
+- ftlm_log_partition_complex: per random start, alpha/beta length O(M) (small); Lanczos uses three length-d_k
+  complex vectors (q, q_prev, w) — not a full Krylov basis. k-bench shares one LanczosComplexWorkspace per
+  (nu,nd) sector sized to dim_full (>= any d_K), reused for all K and all FTLM starts (no per-K realloc).
+- exact_log_partition_small_complex (d_k <= ed_cutoff): dense H dk x dk for Jacobi (O(d_k^2)) plus real embedding
+  R of size (2*dk)^2 for diagonalization — often the largest transient for small ED blocks.
+
+Top three contributors to peak RSS on typical k-bench runs (after orbit+GS Φ; order can vary)
+1) Exact ED path when d_k <= ed_cutoff: O(d_k^2) complex H and O((2*d_k)^2) real R for the largest small blocks.
+2) Φ column storage + sector scratch: O(d_full * d_k) + O(d_full) vin/wout; Lanczos pool O(dim_full) when FTLM runs.
+3) Allocator / macOS RSS high-water (not equal to sum of live buffers).
+
+Measured 3x2 k-bench (beta=20, n_mu=221, same CLI as run_3x2_three_way_monitoring.sh): peak_rss_mib ~64 before dense-P
+removal (Mar 2026) vs ~12–15 MiB after (orbit Bloch + Gram–Schmidt, no d_full×d_full projector). Wall time for sector
+logZ step was ~3.7 s vs ~1.6 s on the same machine (less allocation / no eigh; GS adds O(d_k^2 d_full) work per block).
+
+Future (optional)
+- lanczos_mode = low_memory: could reduce storage in quadrature (e.g. smaller n×n Jacobi workspace) or recompute —
+  not implemented; current Lanczos recurrence is already minimal-vector (3 buffers).
+
+Lifetime rules (k-bench)
+- One HubbardMomentumBlock per (sector, K): construct -> trace -> destroy before next K.
+- One MomentumBlockScratch per (nu,nd) sector: reused for all K; vin/wout shrunk after the sector loop.
+- One FtlmParams::lanczos_ws per sector: ensure(dim_full) once; cleared after the sector (no concurrent Lanczos runs).
+
+Before vs after (this change set)
+- Before: each block owned vin/wout vectors (~2 * d_full * 16 bytes) in addition to Phi.
+- After: vin/wout come from shared MomentumBlockScratch or thread_local; block object only holds Phi (+ fb).
+- After: phi_.shrink_to_fit() in ~HubbardMomentumBlock to return Phi storage to the allocator sooner.
+
+Instrumentation (ftlm_bench_ftlm_nmu_rect_k)
+- --mem-report=1: prints one line with max_phi_bytes (largest Phi over all blocks) and peak_rss (getrusage high water).
+- --mem-report-detail=1: sets FTLM_MEM_REPORT_DETAIL so each HubbardMomentumBlock ctor logs d_full, d_k, phi_bytes to stderr.
+- --lanczos-ws-report=1: per K line with d_K and shared Lanczos pool capacity in bytes (stderr).
+
+Legacy note (obsolete): with dense P_k + eigh in-core, peak_rss_mib for the same 3x2 k-bench was often ~60–80 MiB.

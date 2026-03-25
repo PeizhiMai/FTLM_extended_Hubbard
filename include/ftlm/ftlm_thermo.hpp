@@ -4,6 +4,8 @@
 #include <functional>
 #include <vector>
 
+#include "ftlm/lanczos.hpp"
+
 namespace ftlm {
 
 /// Controls stochastic Lanczos depth for FTLM-style canonical traces (real-symmetric H).
@@ -11,6 +13,10 @@ struct FtlmParams {
   int n_random = 16;
   int lanczos_steps = 96;
   unsigned seed = 1;
+  /// If non-null, `ftlm_log_partition_complex` reuses these O(dim) complex buffers across random starts
+  /// (and callers can size once per sector to max block dimension). `ftlm_log_partition_real` may also use it
+  /// for the internal complex Lanczos path.
+  LanczosComplexWorkspace* lanczos_ws = nullptr;
 };
 
 /// Stochastic estimate of \(\ln \mathrm{Tr}\,e^{-\beta H}\) for **real-symmetric** \(H\), using

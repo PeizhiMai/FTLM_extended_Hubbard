@@ -1,4 +1,5 @@
 // Grand-canonical n(mu) at fixed beta via FTLM using translation-symmetry momentum blocks.
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <complex>
@@ -233,6 +234,15 @@ int main(int argc, char** argv) {
   const int no_log_k_dims = parse_int_arg(argc, argv, "no-log-k-dims", 0);
   const bool log_k_dims = (no_log_k_dims == 0);
   const int ed_cutoff = parse_int_arg(argc, argv, "ed-cutoff", 64);
+  const int mem_report = parse_int_arg(argc, argv, "mem-report", 0);
+  const int mem_report_detail = parse_int_arg(argc, argv, "mem-report-detail", 0);
+  const int lanczos_ws_report = parse_int_arg(argc, argv, "lanczos-ws-report", 0);
+#if !defined(_WIN32)
+  if (mem_report_detail != 0) {
+    (void)setenv("FTLM_MEM_REPORT_DETAIL", "1", 1);
+  }
+#endif
+  std::size_t max_gram_storage_bytes = 0;
 
   const auto t_wall0 = clock::now();
 
@@ -286,11 +296,20 @@ int main(int argc, char** argv) {
       int dim_k_total = 0;
       int n_ed_blocks = 0;
       int n_ftlm_blocks = 0;
+      // One scratch shared across all K for this (nu,nd): only one HubbardMomentumBlock alive at a time.
+      ftlm::symmetry::MomentumBlockScratch sector_k_scratch;
+      ftlm::LanczosComplexWorkspace lanczos_ws;
+      // Size follows each k-block dim (ftlm_log_partition_complex → lanczos_tridiagonal → ensure(dk)), not dim_full.
+      fpar.lanczos_ws = &lanczos_ws;
       for (int ky = 0; ky < Ly; ++ky) {
         for (int kx = 0; kx < Lx; ++kx) {
           const ftlm::symmetry::MomentumSector K{kx, ky, Lx, Ly};
           const auto kb = ftlm::symmetry::KBasis::build(map, K);
-          const int dk = static_cast<int>(hub.momentum_block_dim(map, K, nu, nd));
+          ftlm::symmetry::HubbardMomentumBlock kblock(hub, map, K, nu, nd, &sector_k_scratch);
+          const int dk = static_cast<int>(kblock.dim());
+          if (mem_report != 0) {
+            max_gram_storage_bytes = std::max(max_gram_storage_bytes, kblock.phi_bytes());
+          }
           dim_k_total += dk;
           if (log_k_dims) {
             std::cerr << "  k=(" << kx << "," << ky << ") dim=" << dk << " kb_dim=" << kb.dim() << "\n";
@@ -298,10 +317,12 @@ int main(int argc, char** argv) {
           if (dk <= 0) {
             continue;
           }
+          if (lanczos_ws_report != 0) {
+            std::cerr << "[lanczos_ws] sector_idx=" << idx << " k=(" << kx << "," << ky << ") d_K=" << dk
+                      << " shared_pool_bytes=" << lanczos_ws.bytes_capacity() << "\n";
+          }
 
-          auto apply_h = [&](const std::complex<double>* x, std::complex<double>* y) {
-            hub.apply(map, K, nu, nd, x, y);
-          };
+          auto apply_h = [&](const std::complex<double>* x, std::complex<double>* y) { kblock.apply(x, y); };
 
           double lz_k = -std::numeric_limits<double>::infinity();
           if (dk <= ed_cutoff) {
@@ -316,6 +337,11 @@ int main(int argc, char** argv) {
           logZ_sector = logsumexp2(logZ_sector, lz_k);
         }
       }
+      sector_k_scratch.vin.clear();
+      sector_k_scratch.vin.shrink_to_fit();
+      sector_k_scratch.wout.clear();
+      sector_k_scratch.wout.shrink_to_fit();
+      fpar.lanczos_ws = nullptr;
 
       logZ[static_cast<size_t>(idx)] = logZ_sector;
       std::cerr << "sector (" << nu << "," << nd << ") dim_full=" << dim_full << " dim_k_total=" << dim_k_total
@@ -381,6 +407,10 @@ int main(int argc, char** argv) {
   const double t_wall = std::chrono::duration<double>(clock::now() - t_wall0).count();
   const double peak_b = peak_rss_bytes_self();
   const double peak_mib = peak_b / (1024.0 * 1024.0);
+  if (mem_report != 0) {
+    std::cout << "[mem] max_gram_storage_bytes=" << max_gram_storage_bytes << " peak_rss_mib=" << peak_mib
+              << " peak_rss_bytes=" << peak_b << "\n";
+  }
   if (!no_monitor) {
     std::cout << "[monitor] wall_time_s=" << t_wall << "  wall_sector_logZ_s=" << t_sectors
               << "  peak_rss_mib=" << peak_mib << "  peak_rss_bytes=" << peak_b << "\n";

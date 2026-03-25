@@ -192,11 +192,13 @@ SectorEigs compute_sector(const ftlm::HubbardParams& p, const std::vector<ftlm::
   std::vector<double> eval_k_all;
   eval_k_all.reserve(static_cast<size_t>(out.dim));
 
+  ftlm::symmetry::MomentumBlockScratch k_scratch;
   for (int ky = 0; ky < Ly; ++ky) {
     for (int kx = 0; kx < Lx; ++kx) {
       const ftlm::symmetry::MomentumSector K{kx, ky, Lx, Ly};
       const auto kb = ftlm::symmetry::KBasis::build(map, K);
-      const int dk = static_cast<int>(hub.momentum_block_dim(map, K, nup, ndn));
+      ftlm::symmetry::HubbardMomentumBlock block(hub, map, K, nup, ndn, &k_scratch);
+      const int dk = static_cast<int>(block.dim());
       if (dk <= 0) {
         continue;
       }
@@ -208,7 +210,7 @@ SectorEigs compute_sector(const ftlm::HubbardParams& p, const std::vector<ftlm::
       for (int j = 0; j < dk; ++j) {
         std::fill(x.begin(), x.end(), std::complex<double>(0.0, 0.0));
         x[static_cast<size_t>(j)] = {1.0, 0.0};
-        hub.apply(map, K, nup, ndn, x.data(), y.data());
+        block.apply(x.data(), y.data());
         for (int i = 0; i < dk; ++i) {
           Hk[static_cast<size_t>(i)][static_cast<size_t>(j)] = y[static_cast<size_t>(i)];
         }
@@ -226,6 +228,10 @@ SectorEigs compute_sector(const ftlm::HubbardParams& p, const std::vector<ftlm::
       out.k_blocks.push_back(std::move(blk));
     }
   }
+  k_scratch.vin.clear();
+  k_scratch.vin.shrink_to_fit();
+  k_scratch.wout.clear();
+  k_scratch.wout.shrink_to_fit();
 
   std::sort(eval_k_all.begin(), eval_k_all.end());
   out.eval_k_merged_sorted = std::move(eval_k_all);

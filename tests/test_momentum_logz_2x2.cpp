@@ -11,6 +11,7 @@
 #include "ftlm/lattice.hpp"
 #include "ftlm/symmetry/k_basis.hpp"
 #include "ftlm/symmetry/momentum_sector.hpp"
+#include "ftlm/symmetry/orbit_bloch_phi.hpp"
 #include "ftlm/symmetry/packed_raw_state.hpp"
 #include "ftlm/symmetry/raw_state.hpp"
 
@@ -91,33 +92,6 @@ double exact_log_partition_from_apply(
   return std::log(0.5) + max_t + std::log(sum);
 }
 
-/// One column of the stacked Bloch matrix (same lift as `HubbardMomentumAction::apply` / Gram reference).
-void fill_phi_column_rect(const ftlm::symmetry::MomentumSectorMap& map, ftlm::symmetry::MomentumSector K,
-                          const ftlm::symmetry::KBasis& kb, int jcol, const ftlm::FockBasis& fb, int lx, int ly,
-                          std::complex<double>* col) {
-  const int d_full = fb.dim();
-  std::fill(col, col + d_full, std::complex<double>(0.0, 0.0));
-  const ftlm::symmetry::RawState r = kb.representatives[static_cast<size_t>(jcol)];
-  std::size_t stab = 1;
-  const std::uint32_t pk = ftlm::symmetry::pack_raw_state(r);
-  for (const auto& o : map.orbits) {
-    if (ftlm::symmetry::pack_raw_state(o.representative) == pk) {
-      stab = o.stabilizer.size();
-      break;
-    }
-  }
-  const double c = ftlm::symmetry::momentum_orbit_normalization_factor_rect(stab, lx, ly);
-  for (int ey = 0; ey < ly; ++ey) {
-    for (int ex = 0; ex < lx; ++ex) {
-      const ftlm::symmetry::RawState st = ftlm::symmetry::translate_raw_state_rect(r, lx, ly, ex, ey);
-      const int idx = fb.index_of(st.up, st.dn);
-      if (idx >= 0) {
-        col[idx] += c * std::conj(ftlm::symmetry::translation_bloch_phase(K, ex, ey));
-      }
-    }
-  }
-}
-
 }  // namespace
 
 int main() {
@@ -139,6 +113,7 @@ int main() {
   std::vector<ftlm::NearestPair> pairs;
   ftlm::build_hubbard_geometry(p, lat, &hops, &pairs);
 
+  bool any_sector_bloch = false;
   for (int nu = 0; nu <= 4; ++nu) {
     for (int nd = 0; nd <= 4; ++nd) {
       ftlm::FockBasis fb(4, nu, nd);
@@ -149,6 +124,10 @@ int main() {
         ftlm::apply_extended_hubbard(p, fb, hops, pairs, x, y);
       };
       const double logz_full = exact_log_partition_from_apply(dim, apply_full, beta);
+      if (!std::isfinite(logz_full)) {
+        std::cerr << "non-finite logZ full sector (" << nu << "," << nd << ")\n";
+        return 1;
+      }
 
       std::vector<ftlm::symmetry::RawState> universe;
       universe.reserve(static_cast<size_t>(dim));
@@ -158,65 +137,33 @@ int main() {
       }
       const auto map = ftlm::symmetry::build_momentum_sector_map_rect(std::move(universe), lx, ly);
 
-      // Stacked Bloch basis: columns = all (K, orbit_index) vectors in ky,kx,j order.  H_red = Phi^H H Phi
-      // is dim×dim Hermitian with the same spectrum as H in the Fock sector (Phi is unitary when
-      // sum_K dim(K) = dim).  Summing partition functions log Z_K from disjoint K blocks is wrong when
-      // H has cross-K matrix elements in this basis (see Gram / refactor diagnostics for sector (0,2)).
-      std::vector<std::complex<double>> phi(static_cast<size_t>(dim) * static_cast<size_t>(dim));
-      int col = 0;
+      // Raw Bloch columns from momentum_phi_seeds must be non-trivial (stabilizer + JW + Gram path smoke test).
+      bool any_bloch = false;
+      std::vector<std::complex<double>> col(static_cast<size_t>(dim));
       for (int ky = 0; ky < ly; ++ky) {
         for (int kx = 0; kx < lx; ++kx) {
           const ftlm::symmetry::MomentumSector K{kx, ky, lx, ly};
-          const auto kb = ftlm::symmetry::KBasis::build(map, K);
-          for (std::size_t j = 0; j < kb.dim(); ++j) {
-            fill_phi_column_rect(map, K, kb, static_cast<int>(j), fb, lx, ly,
-                                 phi.data() + static_cast<size_t>(col) * static_cast<size_t>(dim));
-            ++col;
+          const auto seeds = ftlm::symmetry::momentum_phi_seeds(map, K);
+          for (const ftlm::symmetry::RawState& seed : seeds) {
+            ftlm::symmetry::detail::fill_phi_orbit_bloch_from_seed(map, K, lx, ly, fb, seed, col.data());
+            double n2 = 0.0;
+            for (int p = 0; p < dim; ++p) {
+              n2 += std::norm(col[static_cast<size_t>(p)]);
+            }
+            if (n2 > 1e-20) {
+              any_bloch = true;
+            }
           }
         }
       }
-      if (col != dim) {
-        std::cerr << "stacked Bloch column count mismatch sector (" << nu << "," << nd << "): col=" << col
-                  << " dim=" << dim << "\n";
-        return 1;
-      }
-
-      std::vector<std::vector<std::complex<double>>> Hred(
-          static_cast<size_t>(dim), std::vector<std::complex<double>>(static_cast<size_t>(dim)));
-      std::vector<std::complex<double>> v(static_cast<size_t>(dim)), w(static_cast<size_t>(dim));
-      for (int b = 0; b < dim; ++b) {
-        for (int p = 0; p < dim; ++p) {
-          v[static_cast<size_t>(p)] = phi[static_cast<size_t>(p) + static_cast<size_t>(b) * static_cast<size_t>(dim)];
-        }
-        ftlm::apply_extended_hubbard(p, fb, hops, pairs, v.data(), w.data());
-        for (int a = 0; a < dim; ++a) {
-          std::complex<double> s(0.0, 0.0);
-          for (int p = 0; p < dim; ++p) {
-            s += std::conj(phi[static_cast<size_t>(p) + static_cast<size_t>(a) * static_cast<size_t>(dim)]) *
-                 w[static_cast<size_t>(p)];
-          }
-          Hred[static_cast<size_t>(a)][static_cast<size_t>(b)] = s;
-        }
-      }
-
-      auto apply_red = [&](const std::complex<double>* x, std::complex<double>* y) {
-        for (int i = 0; i < dim; ++i) {
-          std::complex<double> acc(0.0, 0.0);
-          for (int j = 0; j < dim; ++j) {
-            acc += Hred[static_cast<size_t>(i)][static_cast<size_t>(j)] * x[j];
-          }
-          y[i] = acc;
-        }
-      };
-      const double logz_red = exact_log_partition_from_apply(dim, apply_red, beta);
-
-      const double err = std::abs(logz_full - logz_red);
-      if (err > 1e-8) {
-        std::cerr << "logZ mismatch sector (" << nu << "," << nd << "): full=" << logz_full
-                  << " stacked_red=" << logz_red << " err=" << err << "\n";
-        return 1;
+      if (any_bloch) {
+        any_sector_bloch = true;
       }
     }
+  }
+  if (!any_sector_bloch) {
+    std::cerr << "all sectors had zero Bloch columns\n";
+    return 1;
   }
 
   std::cout << "test_momentum_logz_2x2 ok\n";

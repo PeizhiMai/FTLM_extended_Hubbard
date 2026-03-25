@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "ftlm/symmetry/momentum_sector.hpp"
+#include "ftlm/symmetry/orbit.hpp"
 #include "ftlm/symmetry/packed_raw_state.hpp"
 #include "ftlm/symmetry/raw_state.hpp"
 
@@ -60,6 +61,29 @@ struct KBasis {
     return static_cast<std::size_t>(it - rep_packed.begin());
   }
 };
+
+/// One raw Bloch column per orbit **member** (not only the canonical representative). For each translation orbit
+/// compatible with `K`, appends every distinct state in that orbit (size `orbit_size`). After Gram whitening,
+/// this spans the same `P_K` subspace as the dense translation projector.
+inline std::vector<RawState> momentum_phi_seeds(const MomentumSectorMap& map, MomentumSector K) {
+  std::vector<RawState> seeds;
+  const std::size_t flat = static_cast<std::size_t>(K.flat_index());
+  if (flat >= map.orbit_indices_by_momentum.size()) {
+    return seeds;
+  }
+  for (std::size_t oi : map.orbit_indices_by_momentum[flat]) {
+    std::vector<RawState> members;
+    enumerate_translation_orbit_rect(map.orbits[oi].representative, map.lx, map.ly, &members);
+    seeds.insert(seeds.end(), members.begin(), members.end());
+  }
+  std::sort(seeds.begin(), seeds.end(), [](RawState a, RawState b) {
+    return pack_raw_state(a) < pack_raw_state(b);
+  });
+  seeds.erase(std::unique(seeds.begin(), seeds.end(),
+                           [](RawState a, RawState b) { return pack_raw_state(a) == pack_raw_state(b); }),
+              seeds.end());
+  return seeds;
+}
 
 }  // namespace symmetry
 }  // namespace ftlm

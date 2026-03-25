@@ -19,9 +19,9 @@
 #include "ftlm/symmetry/hubbard_momentum_action.hpp"
 #include "ftlm/symmetry/k_basis.hpp"
 #include "ftlm/symmetry/momentum_sector.hpp"
+#include "ftlm/symmetry/orbit_bloch_phi.hpp"
 #include "ftlm/symmetry/packed_raw_state.hpp"
 #include "ftlm/symmetry/raw_state.hpp"
-#include "ftlm/symmetry/translation_projector_dense.hpp"
 
 namespace {
 
@@ -174,12 +174,12 @@ int main() {
 
   const auto H_full = build_full_H(p, fb, hops, pairs);
 
-  // Reference Phi: identical to HubbardMomentumAction (dense translation projector P_k, JW-consistent U(R)).
+  // Reference Phi: same construction as HubbardMomentumBlock (orbit Bloch columns + Gram–Schmidt).
   std::vector<std::complex<double>> phi_cm;
   std::size_t dk_ref = 0;
-  ftlm::symmetry::detail::build_phi_from_translation_projector_dense(fb, Lx, Ly, K, &phi_cm, &dk_ref);
+  ftlm::symmetry::build_momentum_phi_orbit_orthonormal(map, K, Lx, Ly, fb, &phi_cm, &dk_ref);
   if (static_cast<int>(dk_ref) != dk) {
-    std::cerr << "dk mismatch: build_phi dk=" << dk_ref << " vs momentum_block_dim=" << dk << "\n";
+    std::cerr << "dk mismatch: orbit phi dk=" << dk_ref << " vs momentum_block_dim=" << dk << "\n";
     return 2;
   }
   std::vector<std::vector<std::complex<double>>> Phi(static_cast<size_t>(dim_full),
@@ -239,8 +239,7 @@ int main() {
   }
 
   std::cout << "\n--- Convention audit (reference path) ---\n";
-  std::cout << "  Phi columns = orthonormal basis of range(P_k), P_k = (1/|G|) sum_R conj(chi_k(R)) U(R),\n";
-  std::cout << "  U(R) fermionic signed permutations (same JW order as apply_extended_hubbard).\n";
+  std::cout << "  Phi columns = orbit Bloch sums per KBasis rep, then orthonormalized (modified Gram–Schmidt).\n";
   std::cout << "  H_ref = Phi^H H_full Phi.\n";
 
   std::cout << "\n--- Convention audit (HubbardMomentumAction::apply) ---\n";

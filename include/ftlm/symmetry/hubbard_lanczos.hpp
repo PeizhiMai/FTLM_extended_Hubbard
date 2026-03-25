@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "ftlm/lanczos.hpp"
 #include "ftlm/lanczos_engine.hpp"
 #include "ftlm/symmetry/hubbard_momentum_action.hpp"
@@ -26,17 +28,12 @@ inline int popcount16_hub(std::uint16_t x) {
 
 }  // namespace detail
 
-/// Binds `HubbardMomentumAction::apply` to a fixed \((k_x,k_y)\) block for use with `LanczosEngine` /
-/// `lanczos_extrema`. Callers must keep `hub`, `map`, and `basis` alive for the binder’s lifetime.
+/// Binds a **cached** `HubbardMomentumBlock` (one \(\Phi\) build) for `LanczosEngine` / `lanczos_extrema`.
 struct HubbardKBlockApply {
-  const HubbardMomentumAction* hub = nullptr;
-  const MomentumSectorMap* map = nullptr;
-  MomentumSector K{};
-  int n_up = 0;
-  int n_dn = 0;
+  std::shared_ptr<HubbardMomentumBlock> block;
 
   void operator()(const std::complex<double>* x, std::complex<double>* y) const {
-    hub->apply(*map, K, n_up, n_dn, x, y);
+    block->apply(x, y);
   }
 };
 
@@ -47,8 +44,9 @@ inline LanczosExtrema lanczos_extrema_hubbard_k_block(const HubbardMomentumActio
   const RawState r0 = basis.representatives[0];
   const int n_up = detail::popcount16_hub(r0.up);
   const int n_dn = detail::popcount16_hub(r0.dn);
-  const int dim = static_cast<int>(hub.momentum_block_dim(map, K, n_up, n_dn));
-  const HubbardKBlockApply binder{&hub, &map, K, n_up, n_dn};
+  auto blk = std::make_shared<HubbardMomentumBlock>(hub, map, K, n_up, n_dn);
+  const int dim = static_cast<int>(blk->dim());
+  const HubbardKBlockApply binder{std::move(blk)};
   return lanczos_extrema(dim, binder, max_steps, seed);
 }
 
@@ -58,8 +56,9 @@ inline LanczosEngine make_lanczos_engine_hubbard_k_block(const HubbardMomentumAc
   const RawState r0 = basis.representatives[0];
   const int n_up = detail::popcount16_hub(r0.up);
   const int n_dn = detail::popcount16_hub(r0.dn);
-  const int dim = static_cast<int>(hub.momentum_block_dim(map, K, n_up, n_dn));
-  return LanczosEngine(dim, HubbardKBlockApply{&hub, &map, K, n_up, n_dn});
+  auto blk = std::make_shared<HubbardMomentumBlock>(hub, map, K, n_up, n_dn);
+  const int dim = static_cast<int>(blk->dim());
+  return LanczosEngine(dim, HubbardKBlockApply{std::move(blk)});
 }
 
 }  // namespace symmetry

@@ -13,6 +13,7 @@
 #include "ftlm/symmetry/k_basis.hpp"
 #include "ftlm/symmetry/momentum_sector.hpp"
 #include "ftlm/symmetry/raw_state.hpp"
+#include "ftlm/symmetry/orbit_bloch_phi.hpp"
 #include "ftlm/symmetry/translation_projector_dense.hpp"
 
 #if defined(__APPLE__)
@@ -195,26 +196,28 @@ int main() {
           }
         }
 
-        std::cout << "K=(" << kx << "," << ky << ") dk_KBasis=" << dk << " max_skew(P,H)=" << skew << " trace(P)=" << tr
-                  << " eval_max=" << emax << " rank_cnt(lambda>0.5)=" << cnt_05 << " rank_cnt(>1e-8)=" << cnt_1e8
-                  << " rank_cnt(>1e-3)=" << cnt_1e3 << "\n";
+        std::cout << "K=(" << kx << "," << ky << ") dk_KBasis(reps)=" << dk
+                  << " seeds=" << ftlm::symmetry::momentum_phi_seeds(map, K).size() << " max_skew(P,H)=" << skew
+                  << " trace(P)=" << tr << " eval_max=" << emax << " rank_cnt(lambda>0.5)=" << cnt_05
+                  << " rank_cnt(>1e-8)=" << cnt_1e8 << " rank_cnt(>1e-3)=" << cnt_1e3 << "\n";
         std::cout << "  evals ascending:";
         for (double e : ev_sorted) {
           std::cout << " " << e;
         }
         std::cout << "\n";
 
-        // Orbit-Bloch Gram on representatives in kb (columns = fill_phi_orbit_bloch_bitonly)
-        if (dk > 0) {
-          std::vector<std::complex<double>> phi_flat(static_cast<size_t>(d) * static_cast<size_t>(dk), 0.0);
-          for (int j = 0; j < dk; ++j) {
-            ftlm::symmetry::detail::fill_phi_orbit_bloch_bitonly(map, K, kb, Lx, Ly, fb, j,
-                                                                 phi_flat.data() + static_cast<size_t>(j) * static_cast<size_t>(d));
+        const std::vector<ftlm::symmetry::RawState> seeds = ftlm::symmetry::momentum_phi_seeds(map, K);
+        const int ns = static_cast<int>(seeds.size());
+        if (ns > 0) {
+          std::vector<std::complex<double>> phi_flat(static_cast<size_t>(d) * static_cast<size_t>(ns), 0.0);
+          for (int j = 0; j < ns; ++j) {
+            ftlm::symmetry::detail::fill_phi_orbit_bloch_from_seed(map, K, Lx, Ly, fb, seeds[static_cast<size_t>(j)],
+                                                                   phi_flat.data() + static_cast<size_t>(j) * static_cast<size_t>(d));
           }
-          std::vector<std::vector<std::complex<double>>> G(static_cast<size_t>(dk),
-                                                            std::vector<std::complex<double>>(static_cast<size_t>(dk), 0.0));
-          for (int a = 0; a < dk; ++a) {
-            for (int b = 0; b < dk; ++b) {
+          std::vector<std::vector<std::complex<double>>> G(static_cast<size_t>(ns),
+                                                            std::vector<std::complex<double>>(static_cast<size_t>(ns), 0.0));
+          for (int a = 0; a < ns; ++a) {
+            for (int b = 0; b < ns; ++b) {
               std::complex<double> z(0.0, 0.0);
               for (int p = 0; p < d; ++p) {
                 const std::complex<double> pa = phi_flat[static_cast<size_t>(p) + static_cast<size_t>(a) * static_cast<size_t>(d)];
@@ -232,7 +235,7 @@ int main() {
           for (double x : gev) {
             gmax = std::max(gmax, x);
           }
-          std::cout << "  orbit-Bloch Gram eigenvalues min=" << gmin << " max=" << gmax << " (expect 1 if ONB)\n";
+          std::cout << "  orbit-Bloch Gram (seeds) eigenvalues min=" << gmin << " max=" << gmax << " (expect 1 if ONB)\n";
         }
       }
     }
