@@ -52,6 +52,6 @@ print('ED: n_mu points =', len(mu), '  eigenlevels =', len(levels))
 } | tee "$OUT"
 
 echo ""
-echo "--- Updating three-way plot PNG ---"
+echo "--- Updating three-way plot PNG (prints numerics + wall_time_s + peak RSS from this log) ---"
 python3 "${REPO}/benchmarks/plot_n_vs_mu_3x2_three_way.py"
-echo "Done. Log: ${OUT}"
+echo "Done. Full run log: ${OUT}"

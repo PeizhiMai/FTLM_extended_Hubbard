@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -16,6 +17,26 @@ if str(BENCH) not in sys.path:
 
 from hubbard_rect_ed import all_eigenlevels_rect, grand_canonical_n
 from plot_n_vs_mu import load_tsv
+
+_METRIC_LINE = re.compile(
+    r"^METRIC\s+kind=(?P<kind>\S+)\s+.*?"
+    r"wall_time_s=(?P<wall>[\d.eE+-]+)\s+.*?"
+    r"peak_rss_bytes=(?P<rss_b>[\d.eE+-]+)\s+.*?"
+    r"peak_rss_mib=(?P<rss_mib>[\d.eE+-]+)",
+    re.DOTALL,
+)
+
+
+def parse_monitoring_metrics(log_text: str) -> dict[str, tuple[float, float, float]]:
+    """kind -> (wall_time_s, peak_rss_bytes, peak_rss_mib) from METRIC lines."""
+    out: dict[str, tuple[float, float, float]] = {}
+    for line in log_text.splitlines():
+        m = _METRIC_LINE.match(line.strip())
+        if not m:
+            continue
+        kind = m.group("kind")
+        out[kind] = (float(m.group("wall")), float(m.group("rss_b")), float(m.group("rss_mib")))
+    return out
 
 
 def main() -> int:
@@ -34,6 +55,12 @@ def main() -> int:
         "--out",
         type=Path,
         default=REPO_ROOT / "benchmarks/data/n_vs_mu_3x2_beta20_ftlm_nomom_vs_k_vs_ed.png",
+    )
+    ap.add_argument(
+        "--monitoring-log",
+        type=Path,
+        default=REPO_ROOT / "benchmarks/data/n_vs_mu_3x2_beta20_three_way_monitoring.txt",
+        help="Log from run_3x2_three_way_monitoring.sh (METRIC lines for wall time + peak RSS).",
     )
     args = ap.parse_args()
 
@@ -76,7 +103,39 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.out, bbox_inches="tight")
     print(f"wrote {args.out}")
-    print(f"max|nonmom-ED|={d_ne:.3e} max|k-ED|={d_ke:.3e} max|nonmom-k|={d_nk:.3e}")
+
+    metrics: dict[str, tuple[float, float, float]] = {}
+    log_path = args.monitoring_log
+    if log_path.is_file():
+        try:
+            metrics = parse_monitoring_metrics(log_path.read_text(encoding="utf-8", errors="replace"))
+        except OSError as e:
+            print(f"warning: could not read monitoring log {log_path}: {e}", file=sys.stderr)
+
+    print("")
+    print("--- 3x2 three-way report (numerics + run time + peak RSS) ---")
+    print(
+        f"  numerics: max|nonmom-ED|={d_ne:.3e}  max|k-ED|={d_ke:.3e}  max|nonmom-k|={d_nk:.3e}"
+    )
+    if "FTLM_nmu_rect" in metrics:
+        w, rb, rm = metrics["FTLM_nmu_rect"]
+        print(
+            f"  FTLM non-momentum: wall_time_s={w:.4g}  peak_RSS_MiB={rm:.4g}  peak_RSS_bytes={rb:.5g}"
+        )
+    else:
+        print(
+            "  FTLM non-momentum: (no METRIC kind=FTLM_nmu_rect in monitoring log — run benchmarks/run_3x2_three_way_monitoring.sh)"
+        )
+    if "FTLM_nmu_rect_k" in metrics:
+        w, rb, rm = metrics["FTLM_nmu_rect_k"]
+        print(
+            f"  FTLM k-blocks:     wall_time_s={w:.4g}  peak_RSS_MiB={rm:.4g}  peak_RSS_bytes={rb:.5g}"
+        )
+    else:
+        print(
+            "  FTLM k-blocks:     (no METRIC kind=FTLM_nmu_rect_k in monitoring log — run benchmarks/run_3x2_three_way_monitoring.sh)"
+        )
+
     return 0
 
 
