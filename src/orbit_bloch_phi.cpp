@@ -30,28 +30,35 @@ void zheev_full_hermitian_inplace(std::vector<std::complex<double>>* a_colmajor,
     evals->clear();
     return;
   }
+  // Reused across calls (per thread) so repeated Gram diagonalizations do not allocate O(lwork) each time.
+  thread_local static std::vector<std::complex<double>> work_buf;
+  thread_local static std::vector<double> rwork_buf;
 #if defined(__APPLE__)
   char jobz = 'V';
   char uplo = 'U';
   __LAPACK_int nn = static_cast<__LAPACK_int>(n);
   __LAPACK_int lda = static_cast<__LAPACK_int>(n);
   evals->resize(static_cast<std::size_t>(n));
-  std::vector<std::complex<double>> work(1);
+  if (work_buf.size() < 1) {
+    work_buf.resize(1);
+  }
   __LAPACK_int lwork = -1;
-  std::vector<double> rwork(static_cast<std::size_t>(std::max(1, 3 * n - 2)));
+  rwork_buf.resize(static_cast<std::size_t>(std::max(1, 3 * n - 2)));
   __LAPACK_int info = 0;
   zheev_(&jobz, &uplo, &nn, reinterpret_cast<__LAPACK_double_complex*>(a_colmajor->data()), &lda, evals->data(),
-         reinterpret_cast<__LAPACK_double_complex*>(work.data()), &lwork, rwork.data(), &info);
+         reinterpret_cast<__LAPACK_double_complex*>(work_buf.data()), &lwork, rwork_buf.data(), &info);
   if (info != 0) {
     throw std::runtime_error("zheev workspace query failed (orbit_bloch_phi)");
   }
-  lwork = static_cast<__LAPACK_int>(std::llround(work[0].real()));
+  lwork = static_cast<__LAPACK_int>(std::llround(work_buf[0].real()));
   if (lwork < 1) {
     lwork = 1;
   }
-  work.resize(static_cast<std::size_t>(lwork));
+  if (static_cast<std::size_t>(work_buf.size()) < static_cast<std::size_t>(lwork)) {
+    work_buf.resize(static_cast<std::size_t>(lwork));
+  }
   zheev_(&jobz, &uplo, &nn, reinterpret_cast<__LAPACK_double_complex*>(a_colmajor->data()), &lda, evals->data(),
-         reinterpret_cast<__LAPACK_double_complex*>(work.data()), &lwork, rwork.data(), &info);
+         reinterpret_cast<__LAPACK_double_complex*>(work_buf.data()), &lwork, rwork_buf.data(), &info);
   if (info != 0) {
     throw std::runtime_error("zheev failed (orbit_bloch_phi)");
   }
@@ -61,20 +68,24 @@ void zheev_full_hermitian_inplace(std::vector<std::complex<double>>* a_colmajor,
   int nn = n;
   int lda = n;
   evals->resize(static_cast<std::size_t>(n));
-  std::vector<std::complex<double>> work(1);
+  if (work_buf.size() < 1) {
+    work_buf.resize(1);
+  }
   int lwork = -1;
-  std::vector<double> rwork(static_cast<std::size_t>(std::max(1, 3 * n - 2)));
+  rwork_buf.resize(static_cast<std::size_t>(std::max(1, 3 * n - 2)));
   int info = 0;
-  zheev_(&jobz, &uplo, &nn, a_colmajor->data(), &lda, evals->data(), work.data(), &lwork, rwork.data(), &info);
+  zheev_(&jobz, &uplo, &nn, a_colmajor->data(), &lda, evals->data(), work_buf.data(), &lwork, rwork_buf.data(), &info);
   if (info != 0) {
     throw std::runtime_error("zheev workspace query failed (orbit_bloch_phi)");
   }
-  lwork = static_cast<int>(std::llround(work[0].real()));
+  lwork = static_cast<int>(std::llround(work_buf[0].real()));
   if (lwork < 1) {
     lwork = 1;
   }
-  work.resize(static_cast<std::size_t>(lwork));
-  zheev_(&jobz, &uplo, &nn, a_colmajor->data(), &lda, evals->data(), work.data(), &lwork, rwork.data(), &info);
+  if (static_cast<std::size_t>(work_buf.size()) < static_cast<std::size_t>(lwork)) {
+    work_buf.resize(static_cast<std::size_t>(lwork));
+  }
+  zheev_(&jobz, &uplo, &nn, a_colmajor->data(), &lda, evals->data(), work_buf.data(), &lwork, rwork_buf.data(), &info);
   if (info != 0) {
     throw std::runtime_error("zheev failed (orbit_bloch_phi)");
   }
@@ -101,7 +112,6 @@ bool MomentumPhiGramBasis::build(const MomentumSectorMap& orbit_map, MomentumSec
   out->k_out = 0;
   out->V.clear();
   out->evals.clear();
-  out->keep_eig_idx.clear();
   const int d = out->d_full;
   const std::size_t k_in = out->k_in;
   if (k_in == 0 || d <= 0) {
@@ -133,95 +143,122 @@ bool MomentumPhiGramBasis::build(const MomentumSectorMap& orbit_map, MomentumSec
     }
   }
 
-  out->evals.clear();
-  zheev_full_hermitian_inplace(&g, static_cast<int>(k_in), &out->evals);
-  out->V = std::move(g);
+  std::vector<double> evals_all;
+  zheev_full_hermitian_inplace(&g, static_cast<int>(k_in), &evals_all);
 
   double lam_max = 0.0;
-  for (double ev : out->evals) {
+  for (double ev : evals_all) {
     lam_max = std::max(lam_max, ev);
   }
   const double tol_ev = std::max(1e-14 * std::max(1.0, lam_max), 1e-20);
 
-  out->keep_eig_idx.clear();
+  std::vector<std::size_t> keep_idx;
+  keep_idx.reserve(k_in);
   for (std::size_t j = 0; j < k_in; ++j) {
-    if (out->evals[j] > tol_ev) {
-      out->keep_eig_idx.push_back(j);
+    if (evals_all[j] > tol_ev) {
+      keep_idx.push_back(j);
     }
   }
-  out->k_out = out->keep_eig_idx.size();
+  out->k_out = keep_idx.size();
+
+  out->V.clear();
+  out->V.reserve(k_in * out->k_out);
+  for (std::size_t r = 0; r < out->k_out; ++r) {
+    const std::size_t ej = keep_idx[r];
+    for (std::size_t m = 0; m < k_in; ++m) {
+      out->V.push_back(g[static_cast<std::size_t>(m) + ej * k_in]);
+    }
+  }
+  out->evals.clear();
+  out->evals.reserve(out->k_out);
+  for (std::size_t r = 0; r < out->k_out; ++r) {
+    out->evals.push_back(evals_all[keep_idx[r]]);
+  }
   return true;
 }
 
 void MomentumPhiGramBasis::project_block_from_full(const MomentumSectorMap& orbit_map, MomentumSector K,
                                                    const FockBasis& fb, const std::complex<double>* x_full,
-                                                   std::complex<double>* y_block) const {
+                                                   std::complex<double>* y_block,
+                                                   MomentumPhiGramApplyScratch* scratch) const {
   if (k_out == 0) {
     return;
   }
   const int d = d_full;
-  thread_local std::vector<std::complex<double>> a;
-  thread_local std::vector<std::complex<double>> b;
-  thread_local std::vector<std::complex<double>> col;
-  a.resize(k_in);
-  b.resize(k_in);
-  col.resize(static_cast<std::size_t>(d));
+  thread_local std::vector<std::complex<double>> tl_a;
+  thread_local std::vector<std::complex<double>> tl_col;
+  std::vector<std::complex<double>>* a = nullptr;
+  std::vector<std::complex<double>>* col = nullptr;
+  if (scratch != nullptr) {
+    a = &scratch->a;
+    col = &scratch->col;
+  } else {
+    a = &tl_a;
+    col = &tl_col;
+  }
+  a->resize(k_in);
+  col->resize(static_cast<std::size_t>(d));
 
   for (std::size_t m = 0; m < k_in; ++m) {
-    detail::fill_phi_orbit_bloch_from_seed(orbit_map, K, lx, ly, fb, seeds[m], col.data());
+    detail::fill_phi_orbit_bloch_from_seed(orbit_map, K, lx, ly, fb, seeds[m], col->data());
     std::complex<double> am(0.0, 0.0);
     for (int p = 0; p < d; ++p) {
-      am += std::conj(col[static_cast<std::size_t>(p)]) * x_full[static_cast<std::size_t>(p)];
+      am += std::conj((*col)[static_cast<std::size_t>(p)]) * x_full[static_cast<std::size_t>(p)];
     }
-    a[m] = am;
-  }
-  for (std::size_t j = 0; j < k_in; ++j) {
-    std::complex<double> sj(0.0, 0.0);
-    for (std::size_t m = 0; m < k_in; ++m) {
-      sj += std::conj(V[static_cast<std::size_t>(m) + static_cast<std::size_t>(j) * k_in]) * a[m];
-    }
-    b[j] = sj;
+    (*a)[m] = am;
   }
   for (std::size_t r = 0; r < k_out; ++r) {
-    const std::size_t ej = keep_eig_idx[r];
-    y_block[r] = b[ej] / std::sqrt(evals[ej]);
+    std::complex<double> sj(0.0, 0.0);
+    for (std::size_t m = 0; m < k_in; ++m) {
+      sj += std::conj(V[static_cast<std::size_t>(m) + r * k_in]) * (*a)[m];
+    }
+    y_block[r] = sj / std::sqrt(evals[r]);
   }
 }
 
 void MomentumPhiGramBasis::lift_full_from_block(const MomentumSectorMap& orbit_map, MomentumSector K,
                                                const FockBasis& fb, const std::complex<double>* y_block,
-                                               std::complex<double>* x_full) const {
+                                               std::complex<double>* x_full,
+                                               MomentumPhiGramApplyScratch* scratch) const {
   const int d = d_full;
   std::fill(x_full, x_full + d, std::complex<double>(0.0, 0.0));
   if (k_out == 0) {
     return;
   }
-  thread_local std::vector<std::complex<double>> w;
-  thread_local std::vector<std::complex<double>> col;
-  w.assign(k_in, std::complex<double>(0.0, 0.0));
-  col.resize(static_cast<std::size_t>(d));
+  thread_local std::vector<std::complex<double>> tl_w;
+  thread_local std::vector<std::complex<double>> tl_col;
+  std::vector<std::complex<double>>* w = nullptr;
+  std::vector<std::complex<double>>* col = nullptr;
+  if (scratch != nullptr) {
+    w = &scratch->w;
+    col = &scratch->col;
+  } else {
+    w = &tl_w;
+    col = &tl_col;
+  }
+  w->assign(k_in, std::complex<double>(0.0, 0.0));
+  col->resize(static_cast<std::size_t>(d));
 
   for (std::size_t r = 0; r < k_out; ++r) {
-    const std::size_t ej = keep_eig_idx[r];
-    const double inv_sqrt = 1.0 / std::sqrt(evals[ej]);
+    const double inv_sqrt = 1.0 / std::sqrt(evals[r]);
     for (std::size_t m = 0; m < k_in; ++m) {
-      w[m] += y_block[r] * V[static_cast<std::size_t>(m) + ej * k_in] * inv_sqrt;
+      (*w)[m] += y_block[r] * V[static_cast<std::size_t>(m) + r * k_in] * inv_sqrt;
     }
   }
   for (std::size_t m = 0; m < k_in; ++m) {
-    if (w[m].real() == 0.0 && w[m].imag() == 0.0) {
+    if ((*w)[m].real() == 0.0 && (*w)[m].imag() == 0.0) {
       continue;
     }
-    detail::fill_phi_orbit_bloch_from_seed(orbit_map, K, lx, ly, fb, seeds[m], col.data());
+    detail::fill_phi_orbit_bloch_from_seed(orbit_map, K, lx, ly, fb, seeds[m], col->data());
     for (int p = 0; p < d; ++p) {
-      x_full[p] += w[m] * col[static_cast<std::size_t>(p)];
+      x_full[p] += (*w)[m] * (*col)[static_cast<std::size_t>(p)];
     }
   }
 }
 
 std::size_t MomentumPhiGramBasis::storage_bytes() const noexcept {
   return seeds.size() * sizeof(RawState) + V.size() * sizeof(std::complex<double>) +
-         evals.size() * sizeof(double) + keep_eig_idx.size() * sizeof(std::size_t);
+         evals.size() * sizeof(double);
 }
 
 void build_momentum_phi_orbit_orthonormal(const MomentumSectorMap& orbit_map, MomentumSector K, int lx, int ly,

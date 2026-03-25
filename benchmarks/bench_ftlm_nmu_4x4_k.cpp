@@ -337,10 +337,7 @@ int main(int argc, char** argv) {
           logZ_sector = logsumexp2(logZ_sector, lz_k);
         }
       }
-      sector_k_scratch.vin.clear();
-      sector_k_scratch.vin.shrink_to_fit();
-      sector_k_scratch.wout.clear();
-      sector_k_scratch.wout.shrink_to_fit();
+      sector_k_scratch.shrink_after_sector();
       fpar.lanczos_ws = nullptr;
 
       logZ[static_cast<size_t>(idx)] = logZ_sector;

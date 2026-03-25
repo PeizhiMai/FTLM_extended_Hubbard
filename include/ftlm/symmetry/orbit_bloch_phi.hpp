@@ -123,20 +123,40 @@ void build_momentum_phi_orbit_orthonormal(const MomentumSectorMap& orbit_map, Mo
                                           const FockBasis& fb, std::vector<std::complex<double>>* phi_column_major,
                                           std::size_t* dk_out);
 
+/// Reusable temporaries for `MomentumPhiGramBasis::project_block_from_full` / `lift_full_from_block` (avoids
+/// unbounded `thread_local` growth when iterating many momentum sectors).
+struct MomentumPhiGramApplyScratch {
+  std::vector<std::complex<double>> a{};
+  std::vector<std::complex<double>> w{};
+  std::vector<std::complex<double>> col{};
+  void ensure(std::size_t k_in, int d_full) {
+    if (k_in == 0 || d_full <= 0) {
+      return;
+    }
+    a.resize(k_in);
+    w.resize(k_in);
+    col.resize(static_cast<std::size_t>(d_full));
+  }
+  void shrink_to_fit() {
+    a.shrink_to_fit();
+    w.shrink_to_fit();
+    col.shrink_to_fit();
+  }
+};
+
 /// Matrix-free data for the **same** orthonormal Bloch basis as `build_momentum_phi_orbit_orthonormal`:
 /// raw Bloch columns from `seeds`, Gram matrix \(G=\Phi_{\mathrm{raw}}^\dagger \Phi_{\mathrm{raw}}\), Hermitian
 /// diagonalization \(G = V \Lambda V^\dagger\), then \(\Phi = \Phi_{\mathrm{raw}} V \Lambda^{-1/2}\) with small
-/// eigenvalues dropped. **No** dense `d_full × d_k` storage — only \(O(k_{\mathrm{in}}^2)\) for \(V\) plus seeds.
+/// eigenvalues dropped. **No** dense `d_full × d_k` storage — \(O(k_{\mathrm{in}} k_{\mathrm{out}})\) for the kept slice of \(V\) plus seeds.
 struct MomentumPhiGramBasis {
   int d_full = 0;
   int lx = 0;
   int ly = 0;
   std::vector<RawState> seeds{};
-  /// Eigenvectors of \(G\), column-major `k_in × k_in` (LAPACK `zheev` layout).
+  /// Columns of \(V\) for **kept** eigenpairs only: column-major `k_in × k_out` (whitening \(\Phi=\Phi_{\mathrm{raw}} V\Lambda^{-1/2}\)).
   std::vector<std::complex<double>> V{};
+  /// Eigenvalues \(\lambda_j\) aligned with columns of `V` (length `k_out`).
   std::vector<double> evals{};
-  /// Indices `j` into eigenpairs with \(\lambda_j\) above the drop tolerance (length = block dimension).
-  std::vector<std::size_t> keep_eig_idx{};
   std::size_t k_in = 0;
   std::size_t k_out = 0;
 
@@ -146,11 +166,13 @@ struct MomentumPhiGramBasis {
 
   /// `y_block = Φ† x_full` (block length `k_out`).
   void project_block_from_full(const MomentumSectorMap& orbit_map, MomentumSector K, const FockBasis& fb,
-                               const std::complex<double>* x_full, std::complex<double>* y_block) const;
+                               const std::complex<double>* x_full, std::complex<double>* y_block,
+                               MomentumPhiGramApplyScratch* scratch = nullptr) const;
 
   /// `x_full = Φ y_block` (full length `d_full`).
   void lift_full_from_block(const MomentumSectorMap& orbit_map, MomentumSector K, const FockBasis& fb,
-                            const std::complex<double>* y_block, std::complex<double>* x_full) const;
+                            const std::complex<double>* y_block, std::complex<double>* x_full,
+                            MomentumPhiGramApplyScratch* scratch = nullptr) const;
 
   /// Bytes of persistent storage (V, evals, seeds, indices) — **zero** dense Φ bytes.
   std::size_t storage_bytes() const noexcept;

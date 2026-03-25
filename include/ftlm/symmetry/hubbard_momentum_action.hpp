@@ -51,10 +51,19 @@ using HubbardHamiltonianAction = HubbardMomentumAction;
 struct MomentumBlockScratch {
   std::vector<std::complex<double>> vin{};
   std::vector<std::complex<double>> wout{};
+  MomentumPhiGramApplyScratch gram_apply{};
   void ensure_d_full(int d) {
     const auto u = static_cast<std::size_t>(d);
     vin.resize(u);
     wout.resize(u);
+  }
+  /// Drop peak allocations between particle sectors / long runs (k-bench passes one scratch per \((n_\up,n_\down)\)).
+  void shrink_after_sector() {
+    vin.clear();
+    vin.shrink_to_fit();
+    wout.clear();
+    wout.shrink_to_fit();
+    gram_apply.shrink_to_fit();
   }
 };
 

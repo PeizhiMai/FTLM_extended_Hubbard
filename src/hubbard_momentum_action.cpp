@@ -67,6 +67,7 @@ void HubbardMomentumBlock::apply(const std::complex<double>* x, std::complex<dou
   std::vector<std::complex<double>>* pwout = nullptr;
   if (scratch_ != nullptr) {
     scratch_->ensure_d_full(d_full_);
+    scratch_->gram_apply.ensure(gram_.k_in, d_full_);
     pvin = &scratch_->vin;
     pwout = &scratch_->wout;
   } else {
@@ -78,11 +79,12 @@ void HubbardMomentumBlock::apply(const std::complex<double>* x, std::complex<dou
     pwout = &tl_wout;
   }
 
-  gram_.lift_full_from_block(*orbit_map_, K_, fb_, x, pvin->data());
+  MomentumPhiGramApplyScratch* gram_scr = scratch_ != nullptr ? &scratch_->gram_apply : nullptr;
+  gram_.lift_full_from_block(*orbit_map_, K_, fb_, x, pvin->data(), gram_scr);
 
   apply_extended_hubbard(hub_->params, fb_, hub_->hoppings, hub_->nn_pairs, pvin->data(), pwout->data());
 
-  gram_.project_block_from_full(*orbit_map_, K_, fb_, pwout->data(), y);
+  gram_.project_block_from_full(*orbit_map_, K_, fb_, pwout->data(), y, gram_scr);
 }
 
 void HubbardMomentumAction::apply(const MomentumSectorMap& orbit_map, MomentumSector K, int n_up, int n_dn,

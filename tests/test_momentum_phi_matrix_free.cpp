@@ -175,8 +175,7 @@ int main() {
 
   const std::size_t dense_bytes = phi_dense.size() * sizeof(std::complex<double>);
   const std::size_t gram_bytes = gram.storage_bytes();
-  // Dense Φ is O(d·d_k); matrix-free keeps V with O(k_in²). When many raw seeds are dropped (k_in ≫ d_k),
-  // V can be larger than compact Φ — that trade is acceptable to avoid any d_full × d_k array.
+  // Dense Φ is O(d·d_k); matrix-free keeps a k_in×k_out slice of V (no d_full × d_k array).
 
   std::cout << "ok matrix-free vs dense: dk=" << dk_dense << " k_in=" << gram.k_in << " dense_phi_bytes=" << dense_bytes
             << " gram_storage_bytes=" << gram_bytes << "\n";
