@@ -8,6 +8,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <limits>
 #include <string>
 #include <utility>
@@ -22,6 +23,7 @@
 #include "ftlm/hubbard_params.hpp"
 #include "ftlm/symmetry/hubbard_momentum_action.hpp"
 #include "ftlm/symmetry/k_basis.hpp"
+#include "ftlm/symmetry/k_block_pk_tiny_dense.hpp"
 #include "ftlm/symmetry/momentum_sector.hpp"
 #include "ftlm/symmetry/raw_state.hpp"
 
@@ -291,6 +293,21 @@ int main(int argc, char** argv) {
   const int mem_report_detail = parse_int_arg(argc, argv, "mem-report-detail", 0);
   const int lanczos_ws_report = parse_int_arg(argc, argv, "lanczos-ws-report", 0);
   const int mem_instrument = parse_int_arg(argc, argv, "mem-instrument", 0);
+  /// 0 = reuse Gram-build scratch across K (default). 1 = release dense build buffers after each K (A/B experiment).
+  const int gram_build_no_reuse = parse_int_arg(argc, argv, "gram-build-no-reuse", 0);
+  // Prototype: `--kblock-prototype=pkhpk-mf` uses `tiny_pk::apply_symmetrized_PK_H_PK_vector_matrix_free` per (nu,nd,K)
+  // with Lanczos/ED dimension dk = dim_full (full particle-sector Fock list). No HubbardMomentumBlock / Gram / zheev.
+  // Differs from production Gram blocks when dk_Gram != dim_full; use only for experiments on small lattices.
+  // Default (no flag): unchanged Gram-based HubbardMomentumBlock path.
+  const char* kblock_prototype_arg = parse_string_arg(argc, argv, "kblock-prototype");
+  const bool kblock_proto_pkhpk_mf =
+      kblock_prototype_arg != nullptr && std::strcmp(kblock_prototype_arg, "pkhpk-mf") == 0;
+  constexpr int kPkhpkMfMaxDim = 64;
+  if (kblock_prototype_arg != nullptr && !kblock_proto_pkhpk_mf) {
+    std::cerr << "bench_ftlm_nmu_rect_k: unknown --kblock-prototype=" << kblock_prototype_arg
+              << " (supported: pkhpk-mf)\n";
+    return 2;
+  }
 #if !defined(_WIN32)
   if (mem_report_detail != 0) {
     (void)setenv("FTLM_MEM_REPORT_DETAIL", "1", 1);
@@ -324,6 +341,13 @@ int main(int argc, char** argv) {
   std::cout << "ftlm_random=" << n_rand << " lanczos_steps=" << lz_steps << "  sectors=" << nsec << "\n";
   if (!no_monitor) {
     std::cout << "[monitor] wall time + peak RSS reported at exit (disable with --no-monitor=1)\n";
+  }
+  if (gram_build_no_reuse != 0) {
+    std::cout << "[ab] gram_build_no_reuse=1: release Gram-build scratch capacity after each K block\n";
+  }
+  if (kblock_proto_pkhpk_mf) {
+    std::cout << "[kblock-prototype] pkhpk-mf: matrix-free P_K H P_K on full sector when dim_full<=" << kPkhpkMfMaxDim
+              << " (no HubbardMomentumBlock / Gram build for those blocks)\n";
   }
 
   const auto t0 = clock::now();
@@ -373,6 +397,12 @@ int main(int argc, char** argv) {
       ExactEdScratch ed_scratch;
       // One scratch shared across all K for this (nu,nd): only one HubbardMomentumBlock alive at a time.
       ftlm::symmetry::MomentumBlockScratch sector_k_scratch;
+      std::vector<std::complex<double>> pkhpk_w1;
+      std::vector<std::complex<double>> pkhpk_w2;
+      if (kblock_proto_pkhpk_mf && dim_full <= kPkhpkMfMaxDim) {
+        pkhpk_w1.resize(static_cast<std::size_t>(dim_full));
+        pkhpk_w2.resize(static_cast<std::size_t>(dim_full));
+      }
       ftlm::LanczosComplexWorkspace lanczos_ws;
       ftlm::FtlmTridiagonalQuadratureScratch sector_quad_scratch;
       // Size follows each k-block dim (ftlm_log_partition_complex → lanczos_tridiagonal → ensure(dk)), not dim_full.
@@ -382,22 +412,42 @@ int main(int argc, char** argv) {
         for (int kx = 0; kx < Lx; ++kx) {
           const ftlm::symmetry::MomentumSector K{kx, ky, Lx, Ly};
           const auto kb = ftlm::symmetry::KBasis::build(map, K);
-          ftlm::symmetry::HubbardMomentumBlock kblock(hub, map, K, nu, nd, &sector_k_scratch);
-          const int dk = static_cast<int>(kblock.dim());
-          max_dk_sector = std::max(max_dk_sector, dk);
-          max_k_in_sector = std::max(max_k_in_sector, kblock.gram_k_in());
-          max_k_out_sector = std::max(max_k_out_sector, kblock.gram_k_out());
-          max_phi_bytes_sector = std::max(max_phi_bytes_sector, kblock.phi_bytes());
-          max_gram_g_dense_b = std::max(max_gram_g_dense_b, kblock.gram_g_dense_bytes_estimate());
-          max_gram_v_b = std::max(max_gram_v_b, kblock.gram_v_bytes());
-          max_gram_seed_b = std::max(max_gram_seed_b, kblock.gram_seed_bytes());
-          max_gram_eval_b = std::max(max_gram_eval_b, kblock.gram_eval_bytes());
-          if (mem_report != 0) {
-            max_gram_storage_bytes = std::max(max_gram_storage_bytes, kblock.phi_bytes());
+          const bool use_pkhpk_mf_here = kblock_proto_pkhpk_mf && dim_full > 0 && dim_full <= kPkhpkMfMaxDim;
+
+          int dk = 0;
+          std::function<void(const std::complex<double>*, std::complex<double>*)> apply_h;
+          std::unique_ptr<ftlm::symmetry::HubbardMomentumBlock> kblock_hold;
+
+          if (use_pkhpk_mf_here) {
+            dk = dim_full;
+            max_dk_sector = std::max(max_dk_sector, dk);
+            apply_h = [&, K](const std::complex<double>* x, std::complex<double>* y) {
+              ftlm::symmetry::tiny_pk::apply_symmetrized_PK_H_PK_vector_matrix_free(
+                  p, fb, Lx, Ly, K, hub.hoppings, hub.nn_pairs, x, y, &pkhpk_w1, &pkhpk_w2);
+            };
+          } else {
+            kblock_hold = std::make_unique<ftlm::symmetry::HubbardMomentumBlock>(hub, map, K, nu, nd, &sector_k_scratch);
+            dk = static_cast<int>(kblock_hold->dim());
+            max_dk_sector = std::max(max_dk_sector, dk);
+            max_k_in_sector = std::max(max_k_in_sector, kblock_hold->gram_k_in());
+            max_k_out_sector = std::max(max_k_out_sector, kblock_hold->gram_k_out());
+            max_phi_bytes_sector = std::max(max_phi_bytes_sector, kblock_hold->phi_bytes());
+            max_gram_g_dense_b = std::max(max_gram_g_dense_b, kblock_hold->gram_g_dense_bytes_estimate());
+            max_gram_v_b = std::max(max_gram_v_b, kblock_hold->gram_v_bytes());
+            max_gram_seed_b = std::max(max_gram_seed_b, kblock_hold->gram_seed_bytes());
+            max_gram_eval_b = std::max(max_gram_eval_b, kblock_hold->gram_eval_bytes());
+            if (mem_report != 0) {
+              max_gram_storage_bytes = std::max(max_gram_storage_bytes, kblock_hold->phi_bytes());
+            }
+            apply_h = [ptr = kblock_hold.get()](const std::complex<double>* x, std::complex<double>* y) {
+              ptr->apply(x, y);
+            };
           }
+
           dim_k_total += dk;
           if (log_k_dims) {
-            std::cerr << "  k=(" << kx << "," << ky << ") dim=" << dk << " kb_dim=" << kb.dim() << "\n";
+            std::cerr << "  k=(" << kx << "," << ky << ") dim=" << dk << " kb_dim=" << kb.dim()
+                      << (use_pkhpk_mf_here ? " [pkhpk-mf]" : "") << "\n";
           }
           if (dk <= 0) {
             continue;
@@ -406,8 +456,6 @@ int main(int argc, char** argv) {
             std::cerr << "[lanczos_ws] sector_idx=" << idx << " k=(" << kx << "," << ky << ") d_K=" << dk
                       << " shared_pool_bytes=" << lanczos_ws.bytes_capacity() << "\n";
           }
-
-          auto apply_h = [&](const std::complex<double>* x, std::complex<double>* y) { kblock.apply(x, y); };
 
           double lz_k = -std::numeric_limits<double>::infinity();
           if (dk <= ed_cutoff) {
@@ -420,6 +468,9 @@ int main(int argc, char** argv) {
             lz_k = ftlm::ftlm_log_partition_complex(dk, apply_h, beta, fpar);
           }
           logZ_sector = logsumexp2(logZ_sector, lz_k);
+          if (!use_pkhpk_mf_here && gram_build_no_reuse != 0) {
+            sector_k_scratch.gram_build.release_capacity();
+          }
         }
       }
       sector_k_scratch.shrink_after_sector();
@@ -537,6 +588,8 @@ int main(int argc, char** argv) {
     }
   }
   std::cout << "METRIC kind=FTLM_nmu_rect_k wall_time_s=" << t_wall << " wall_sector_logZ_s=" << t_sectors
-            << " peak_rss_bytes=" << peak_b << " peak_rss_mib=" << peak_mib << " n_mu=" << n_mu << "\n";
+            << " peak_rss_bytes=" << peak_b << " peak_rss_mib=" << peak_mib << " n_mu=" << n_mu
+            << " gram_build_no_reuse=" << gram_build_no_reuse
+            << " kblock_prototype=" << (kblock_proto_pkhpk_mf ? "pkhpk-mf" : "none") << "\n";
   return 0;
 }
