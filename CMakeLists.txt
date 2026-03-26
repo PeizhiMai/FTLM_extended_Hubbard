@@ -164,4 +164,8 @@ if(FTLM_BUILD_TESTS)
   add_executable(ftlm_test_k_block_dense_prototype tests/test_k_block_dense_prototype.cpp)
   target_link_libraries(ftlm_test_k_block_dense_prototype PRIVATE ftlm_core)
   add_test(NAME k_block_dense_prototype COMMAND ftlm_test_k_block_dense_prototype)
+
+  add_executable(ftlm_test_k_block_pk_tiny_vs_production tests/test_k_block_pk_tiny_vs_production.cpp)
+  target_link_libraries(ftlm_test_k_block_pk_tiny_vs_production PRIVATE ftlm_core)
+  add_test(NAME k_block_pk_tiny_vs_production COMMAND ftlm_test_k_block_pk_tiny_vs_production)
 endif()
