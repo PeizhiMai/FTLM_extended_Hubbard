@@ -152,8 +152,26 @@ void jacobi_symmetric_all(std::vector<std::vector<double>>& A, int max_sweeps, d
   }
 }
 
+struct ExactEdMemStats {
+  bool ran = false;
+  int max_dim = 0;
+  std::size_t max_H_dense_B = 0;
+  std::size_t max_R_dense_B = 0;
+  std::size_t max_aux_vecs_B = 0;
+  std::size_t max_total_B = 0;
+  bool reused_buffers = false;
+};
+
+struct ExactEdScratch {
+  std::vector<std::vector<std::complex<double>>> H{};
+  std::vector<std::vector<double>> R{};
+  std::vector<std::complex<double>> e{};
+  std::vector<std::complex<double>> y{};
+};
+
 double exact_log_partition_small_complex(
-    int dim, const std::function<void(const std::complex<double>*, std::complex<double>*)>& apply_h, double beta) {
+    int dim, const std::function<void(const std::complex<double>*, std::complex<double>*)>& apply_h, double beta,
+    ExactEdMemStats* mem_stats = nullptr, ExactEdScratch* scratch = nullptr) {
   if (dim <= 0) {
     return -std::numeric_limits<double>::infinity();
   }
@@ -163,11 +181,31 @@ double exact_log_partition_small_complex(
     apply_h(x, y);
     return -beta * y[0].real();
   }
+  if (mem_stats != nullptr) {
+    mem_stats->ran = true;
+    mem_stats->max_dim = std::max(mem_stats->max_dim, dim);
+  }
 
-  std::vector<std::vector<std::complex<double>>> H(
-      static_cast<size_t>(dim), std::vector<std::complex<double>>(static_cast<size_t>(dim), {0.0, 0.0}));
-  std::vector<std::complex<double>> e(static_cast<size_t>(dim), {0.0, 0.0});
-  std::vector<std::complex<double>> y(static_cast<size_t>(dim), {0.0, 0.0});
+  std::vector<std::vector<std::complex<double>>> local_H;
+  std::vector<std::vector<double>> local_R;
+  std::vector<std::complex<double>> local_e;
+  std::vector<std::complex<double>> local_y;
+  auto* H_ptr = scratch ? &scratch->H : &local_H;
+  auto* R_ptr = scratch ? &scratch->R : &local_R;
+  auto* e_ptr = scratch ? &scratch->e : &local_e;
+  auto* y_ptr = scratch ? &scratch->y : &local_y;
+  auto& H = *H_ptr;
+  auto& R = *R_ptr;
+  auto& e = *e_ptr;
+  auto& y = *y_ptr;
+
+  H.resize(static_cast<size_t>(dim));
+  for (auto& row : H) {
+    row.resize(static_cast<size_t>(dim));
+    std::fill(row.begin(), row.end(), std::complex<double>(0.0, 0.0));
+  }
+  e.resize(static_cast<size_t>(dim));
+  y.resize(static_cast<size_t>(dim));
   for (int j = 0; j < dim; ++j) {
     std::fill(e.begin(), e.end(), std::complex<double>(0.0, 0.0));
     e[static_cast<size_t>(j)] = {1.0, 0.0};
@@ -178,7 +216,11 @@ double exact_log_partition_small_complex(
   }
 
   const int m = 2 * dim;
-  std::vector<std::vector<double>> R(static_cast<size_t>(m), std::vector<double>(static_cast<size_t>(m), 0.0));
+  R.resize(static_cast<size_t>(m));
+  for (auto& row : R) {
+    row.resize(static_cast<size_t>(m));
+    std::fill(row.begin(), row.end(), 0.0);
+  }
   for (int i = 0; i < dim; ++i) {
     for (int j = 0; j < dim; ++j) {
       const std::complex<double> hij = H[static_cast<size_t>(i)][static_cast<size_t>(j)];
@@ -189,6 +231,17 @@ double exact_log_partition_small_complex(
       R[static_cast<size_t>(i + dim)][static_cast<size_t>(j)] = im;
       R[static_cast<size_t>(i + dim)][static_cast<size_t>(j + dim)] = re;
     }
+  }
+  if (mem_stats != nullptr) {
+    const std::size_t h_dense_b =
+        static_cast<std::size_t>(dim) * static_cast<std::size_t>(dim) * sizeof(std::complex<double>);
+    const std::size_t r_dense_b = static_cast<std::size_t>(m) * static_cast<std::size_t>(m) * sizeof(double);
+    const std::size_t aux_vecs_b = static_cast<std::size_t>(2 * dim) * sizeof(std::complex<double>);
+    mem_stats->max_H_dense_B = std::max(mem_stats->max_H_dense_B, h_dense_b);
+    mem_stats->max_R_dense_B = std::max(mem_stats->max_R_dense_B, r_dense_b);
+    mem_stats->max_aux_vecs_B = std::max(mem_stats->max_aux_vecs_B, aux_vecs_b);
+    mem_stats->max_total_B = std::max(mem_stats->max_total_B, h_dense_b + r_dense_b + aux_vecs_b);
+    mem_stats->reused_buffers = mem_stats->reused_buffers || (scratch != nullptr);
   }
 
   jacobi_symmetric_all(R, std::max(5000, 150 * m), 1e-13);
@@ -294,12 +347,30 @@ int main(int argc, char** argv) {
       }
 
       const auto map = ftlm::symmetry::build_momentum_sector_map_rect(std::move(universe), Lx, Ly);
+      std::size_t map_orbit_bytes_est = map.orbits.capacity() * sizeof(ftlm::symmetry::OrbitRecord);
+      for (const auto& o : map.orbits) {
+        map_orbit_bytes_est += o.stabilizer.capacity() * sizeof(std::pair<int, int>);
+      }
+      std::size_t map_index_bytes_est = map.orbit_indices_by_momentum.capacity() * sizeof(std::vector<std::size_t>);
+      for (const auto& v : map.orbit_indices_by_momentum) {
+        map_index_bytes_est += v.capacity() * sizeof(std::size_t);
+      }
+      const std::size_t fb_bytes_est = static_cast<std::size_t>(fb.dim()) * (2 * sizeof(std::uint64_t));
       const double rss_before_sector = peak_rss_bytes_self();
       double logZ_sector = -std::numeric_limits<double>::infinity();
       int dim_k_total = 0;
       int n_ed_blocks = 0;
       int n_ftlm_blocks = 0;
+      int max_dk_sector = 0;
       std::size_t max_k_in_sector = 0;
+      std::size_t max_k_out_sector = 0;
+      std::size_t max_phi_bytes_sector = 0;
+      std::size_t max_gram_g_dense_b = 0;
+      std::size_t max_gram_v_b = 0;
+      std::size_t max_gram_seed_b = 0;
+      std::size_t max_gram_eval_b = 0;
+      ExactEdMemStats ed_mem_stats;
+      ExactEdScratch ed_scratch;
       // One scratch shared across all K for this (nu,nd): only one HubbardMomentumBlock alive at a time.
       ftlm::symmetry::MomentumBlockScratch sector_k_scratch;
       ftlm::LanczosComplexWorkspace lanczos_ws;
@@ -313,7 +384,14 @@ int main(int argc, char** argv) {
           const auto kb = ftlm::symmetry::KBasis::build(map, K);
           ftlm::symmetry::HubbardMomentumBlock kblock(hub, map, K, nu, nd, &sector_k_scratch);
           const int dk = static_cast<int>(kblock.dim());
+          max_dk_sector = std::max(max_dk_sector, dk);
           max_k_in_sector = std::max(max_k_in_sector, kblock.gram_k_in());
+          max_k_out_sector = std::max(max_k_out_sector, kblock.gram_k_out());
+          max_phi_bytes_sector = std::max(max_phi_bytes_sector, kblock.phi_bytes());
+          max_gram_g_dense_b = std::max(max_gram_g_dense_b, kblock.gram_g_dense_bytes_estimate());
+          max_gram_v_b = std::max(max_gram_v_b, kblock.gram_v_bytes());
+          max_gram_seed_b = std::max(max_gram_seed_b, kblock.gram_seed_bytes());
+          max_gram_eval_b = std::max(max_gram_eval_b, kblock.gram_eval_bytes());
           if (mem_report != 0) {
             max_gram_storage_bytes = std::max(max_gram_storage_bytes, kblock.phi_bytes());
           }
@@ -334,7 +412,7 @@ int main(int argc, char** argv) {
           double lz_k = -std::numeric_limits<double>::infinity();
           if (dk <= ed_cutoff) {
             ++n_ed_blocks;
-            lz_k = exact_log_partition_small_complex(dk, apply_h, beta);
+            lz_k = exact_log_partition_small_complex(dk, apply_h, beta, &ed_mem_stats, &ed_scratch);
           } else {
             ++n_ftlm_blocks;
             const unsigned seed_k = fseed + static_cast<unsigned>(idx * 257 + ky * 17 + kx);
@@ -355,7 +433,17 @@ int main(int argc, char** argv) {
       if (mem_instrument != 0) {
         const std::size_t zwc = sector_k_scratch.zheev.work.capacity();
         const std::size_t zrwc = sector_k_scratch.zheev.rwork.capacity();
-        std::cerr << "[mem-instr] sector(" << nu << "," << nd << ") idx=" << idx << " max_k_in=" << max_k_in_sector
+        std::cerr << "[mem-instr] sector(" << nu << "," << nd << ") idx=" << idx << " max_d_k=" << max_dk_sector
+                  << " max_k_in=" << max_k_in_sector << " max_k_out=" << max_k_out_sector
+                  << " gram_phi_cap_B=" << max_phi_bytes_sector << " gram_G_dense_est_B=" << max_gram_g_dense_b
+                  << " gram_V_B=" << max_gram_v_b << " gram_seed_B=" << max_gram_seed_b
+                  << " gram_eval_B=" << max_gram_eval_b << " ed_ran=" << (ed_mem_stats.ran ? 1 : 0)
+                  << " ed_max_d_k=" << ed_mem_stats.max_dim << " ed_H_dense_B=" << ed_mem_stats.max_H_dense_B
+                  << " ed_R_dense_B=" << ed_mem_stats.max_R_dense_B << " ed_aux_B=" << ed_mem_stats.max_aux_vecs_B
+                  << " ed_total_dense_B=" << ed_mem_stats.max_total_B
+                  << " ed_reused_buffers=" << (ed_mem_stats.reused_buffers ? 1 : 0)
+                  << " map_orbits_B_est=" << map_orbit_bytes_est << " map_indices_B_est=" << map_index_bytes_est
+                  << " fb_major_B_est=" << fb_bytes_est
                   << " zheev_work_cap_B=" << (zwc * sizeof(std::complex<double>))
                   << " zheev_work_size=" << sector_k_scratch.zheev.work.size()
                   << " zheev_rwork_cap_B=" << (zrwc * sizeof(double))

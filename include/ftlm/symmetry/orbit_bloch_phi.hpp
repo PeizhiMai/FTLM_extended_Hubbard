@@ -154,6 +154,21 @@ struct MomentumPhiGramApplyScratch {
   }
 };
 
+/// Reusable build-stage temporaries for `MomentumPhiGramBasis::build` to reduce repeated
+/// dense allocation churn inside per-K momentum block construction.
+struct MomentumPhiGramBuildScratch {
+  std::vector<std::complex<double>> g{};
+  std::vector<std::complex<double>> col_i{};
+  std::vector<std::complex<double>> col_j{};
+  std::vector<double> evals_all{};
+  void shrink_to_fit() {
+    g.shrink_to_fit();
+    col_i.shrink_to_fit();
+    col_j.shrink_to_fit();
+    evals_all.shrink_to_fit();
+  }
+};
+
 /// Matrix-free data for the **same** orthonormal Bloch basis as `build_momentum_phi_orbit_orthonormal`:
 /// raw Bloch columns from `seeds`, Gram matrix \(G=\Phi_{\mathrm{raw}}^\dagger \Phi_{\mathrm{raw}}\), Hermitian
 /// diagonalization \(G = V \Lambda V^\dagger\), then \(\Phi = \Phi_{\mathrm{raw}} V \Lambda^{-1/2}\) with small
@@ -171,9 +186,10 @@ struct MomentumPhiGramBasis {
   std::size_t k_out = 0;
 
   /// Build Gram data from orbit Bloch seeds. Returns false if the block is empty.
-  /// If `zheev_scratch` is non-null, LAPACK workspace is stored there; otherwise local buffers are used (tests / one-off).
+  /// If `zheev_scratch` / `build_scratch` are non-null, reusable scratch is used instead of local temporaries.
   static bool build(const MomentumSectorMap& orbit_map, MomentumSector K, int lx, int ly, const FockBasis& fb,
-                    MomentumPhiGramBasis* out, ZheevHermitianScratch* zheev_scratch = nullptr);
+                    MomentumPhiGramBasis* out, ZheevHermitianScratch* zheev_scratch = nullptr,
+                    MomentumPhiGramBuildScratch* build_scratch = nullptr);
 
   /// `y_block = Φ† x_full` (block length `k_out`).
   void project_block_from_full(const MomentumSectorMap& orbit_map, MomentumSector K, const FockBasis& fb,
@@ -184,6 +200,13 @@ struct MomentumPhiGramBasis {
   void lift_full_from_block(const MomentumSectorMap& orbit_map, MomentumSector K, const FockBasis& fb,
                             const std::complex<double>* y_block, std::complex<double>* x_full,
                             MomentumPhiGramApplyScratch* scratch = nullptr) const;
+
+  std::size_t seeds_bytes() const noexcept { return seeds.size() * sizeof(RawState); }
+  std::size_t v_bytes() const noexcept { return V.size() * sizeof(std::complex<double>); }
+  std::size_t evals_bytes() const noexcept { return evals.size() * sizeof(double); }
+  std::size_t gram_g_dense_bytes_estimate() const noexcept {
+    return k_in * k_in * sizeof(std::complex<double>);
+  }
 
   /// Bytes of persistent storage (V, evals, seeds, indices) — **zero** dense Φ bytes.
   std::size_t storage_bytes() const noexcept;

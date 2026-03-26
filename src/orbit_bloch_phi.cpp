@@ -105,7 +105,8 @@ static std::complex<double> dot_cols_conj_left(const std::complex<double>* a, co
 }
 
 bool MomentumPhiGramBasis::build(const MomentumSectorMap& orbit_map, MomentumSector K, int lx, int ly,
-                                 const FockBasis& fb, MomentumPhiGramBasis* out, ZheevHermitianScratch* zheev_scratch) {
+                                 const FockBasis& fb, MomentumPhiGramBasis* out, ZheevHermitianScratch* zheev_scratch,
+                                 MomentumPhiGramBuildScratch* build_scratch) {
   out->seeds = momentum_phi_seeds(orbit_map, K);
   out->d_full = fb.dim();
   out->lx = lx;
@@ -120,10 +121,23 @@ bool MomentumPhiGramBasis::build(const MomentumSectorMap& orbit_map, MomentumSec
     return false;
   }
 
-  std::vector<std::complex<double>> g(static_cast<std::size_t>(k_in) * k_in, std::complex<double>(0.0, 0.0));
+  std::vector<std::complex<double>> local_g;
+  std::vector<std::complex<double>> local_col_i;
+  std::vector<std::complex<double>> local_col_j;
+  std::vector<double> local_evals_all;
+  std::vector<std::complex<double>>* const g_ptr = build_scratch ? &build_scratch->g : &local_g;
+  std::vector<std::complex<double>>* const col_i_ptr = build_scratch ? &build_scratch->col_i : &local_col_i;
+  std::vector<std::complex<double>>* const col_j_ptr = build_scratch ? &build_scratch->col_j : &local_col_j;
+  std::vector<double>* const evals_all_ptr = build_scratch ? &build_scratch->evals_all : &local_evals_all;
+  std::vector<std::complex<double>>& g = *g_ptr;
+  std::vector<std::complex<double>>& col_i = *col_i_ptr;
+  std::vector<std::complex<double>>& col_j = *col_j_ptr;
+  std::vector<double>& evals_all = *evals_all_ptr;
+
+  g.assign(static_cast<std::size_t>(k_in) * k_in, std::complex<double>(0.0, 0.0));
+  col_i.resize(static_cast<std::size_t>(d));
+  col_j.resize(static_cast<std::size_t>(d));
   {
-    std::vector<std::complex<double>> col_i(static_cast<std::size_t>(d));
-    std::vector<std::complex<double>> col_j(static_cast<std::size_t>(d));
     for (std::size_t i = 0; i < k_in; ++i) {
       detail::fill_phi_orbit_bloch_from_seed(orbit_map, K, lx, ly, fb, out->seeds[i], col_i.data());
       for (std::size_t j = i; j < k_in; ++j) {
@@ -146,7 +160,7 @@ bool MomentumPhiGramBasis::build(const MomentumSectorMap& orbit_map, MomentumSec
     }
   }
 
-  std::vector<double> evals_all;
+  evals_all.clear();
   zheev_full_hermitian_inplace(&g, static_cast<int>(k_in), &evals_all, zheev_scratch);
 
   double lam_max = 0.0;
@@ -172,13 +186,22 @@ bool MomentumPhiGramBasis::build(const MomentumSectorMap& orbit_map, MomentumSec
       out->V.push_back(g[static_cast<std::size_t>(m) + ej * k_in]);
     }
   }
+
+  // After extracting the eigenvector columns needed for the final retained `V`, we no longer need
+  // the dense Gram matrix `g`. Drop it here to reduce lifetime overlap peak during heavy sectors.
+  g.clear();
+  g.shrink_to_fit();
+
   out->evals.clear();
   out->evals.reserve(out->k_out);
   for (std::size_t r = 0; r < out->k_out; ++r) {
     out->evals.push_back(evals_all[keep_idx[r]]);
   }
+  // Keep capacity for reuse, drop sizes now to reduce accidental overlap with subsequent phases.
   g.clear();
-  g.shrink_to_fit();
+  col_i.clear();
+  col_j.clear();
+  evals_all.clear();
   return true;
 }
 

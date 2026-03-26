@@ -28,7 +28,7 @@ std::size_t HubbardMomentumAction::momentum_block_dim(const MomentumSectorMap& o
   const int ly = params.Ly;
   FockBasis fb(lx * ly, n_up, n_dn);
   MomentumPhiGramBasis gram;
-  if (!MomentumPhiGramBasis::build(orbit_map, K, lx, ly, fb, &gram, nullptr)) {
+  if (!MomentumPhiGramBasis::build(orbit_map, K, lx, ly, fb, &gram, nullptr, nullptr)) {
     return 0;
   }
   return gram.k_out;
@@ -44,7 +44,8 @@ HubbardMomentumBlock::HubbardMomentumBlock(const HubbardMomentumAction& hub, con
   const int lx = hub.params.Lx;
   const int ly = hub.params.Ly;
   d_full_ = fb_.dim();
-  if (!MomentumPhiGramBasis::build(orbit_map, K, lx, ly, fb_, &gram_, scratch_ ? &scratch_->zheev : nullptr)) {
+  if (!MomentumPhiGramBasis::build(orbit_map, K, lx, ly, fb_, &gram_, scratch_ ? &scratch_->zheev : nullptr,
+                                   scratch_ ? &scratch_->gram_build : nullptr)) {
     dk_ = 0;
   } else {
     dk_ = gram_.k_out;

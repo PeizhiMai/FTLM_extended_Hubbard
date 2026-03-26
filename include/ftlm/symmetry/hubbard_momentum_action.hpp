@@ -52,6 +52,7 @@ struct MomentumBlockScratch {
   std::vector<std::complex<double>> vin{};
   std::vector<std::complex<double>> wout{};
   MomentumPhiGramApplyScratch gram_apply{};
+  MomentumPhiGramBuildScratch gram_build{};
   ZheevHermitianScratch zheev{};
   void ensure_d_full(int d) {
     const auto u = static_cast<std::size_t>(d);
@@ -65,6 +66,7 @@ struct MomentumBlockScratch {
     wout.clear();
     wout.shrink_to_fit();
     gram_apply.shrink_to_fit();
+    gram_build.shrink_to_fit();
     zheev.shrink_to_fit();
   }
 };
@@ -88,11 +90,16 @@ struct HubbardMomentumBlock {
 
   /// Raw Bloch seed count for this block (Gram size \(k_{\mathrm{in}}\times k_{\mathrm{in}}\) before dropping modes).
   std::size_t gram_k_in() const noexcept { return gram_.k_in; }
+  std::size_t gram_k_out() const noexcept { return gram_.k_out; }
 
   void apply(const std::complex<double>* x, std::complex<double>* y) const;
 
   /// Persistent storage for Gram eigenvectors + seeds (no dense \(\Phi\)); bytes of complex `V` etc.
   std::size_t phi_bytes() const noexcept { return gram_.storage_bytes(); }
+  std::size_t gram_v_bytes() const noexcept { return gram_.v_bytes(); }
+  std::size_t gram_seed_bytes() const noexcept { return gram_.seeds_bytes(); }
+  std::size_t gram_eval_bytes() const noexcept { return gram_.evals_bytes(); }
+  std::size_t gram_g_dense_bytes_estimate() const noexcept { return gram_.gram_g_dense_bytes_estimate(); }
 
   int d_full() const noexcept { return d_full_; }
 
