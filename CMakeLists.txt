@@ -156,4 +156,8 @@ if(FTLM_BUILD_TESTS)
   add_executable(ftlm_test_momentum_phi_matrix_free tests/test_momentum_phi_matrix_free.cpp)
   target_link_libraries(ftlm_test_momentum_phi_matrix_free PRIVATE ftlm_core)
   add_test(NAME momentum_phi_matrix_free COMMAND ftlm_test_momentum_phi_matrix_free)
+
+  add_executable(ftlm_test_k_block_matrix_free_interface tests/test_k_block_matrix_free_interface.cpp)
+  target_link_libraries(ftlm_test_k_block_matrix_free_interface PRIVATE ftlm_core)
+  add_test(NAME k_block_matrix_free_interface COMMAND ftlm_test_k_block_matrix_free_interface)
 endif()
