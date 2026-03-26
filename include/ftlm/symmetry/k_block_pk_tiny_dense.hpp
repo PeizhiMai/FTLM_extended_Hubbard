@@ -17,6 +17,13 @@
 //   from `translation_bloch_phase` (must match extended Hubbard / momentum code conventions).
 // - After the group sum, `detail::hermitian_symmetrize_inplace` cleans Hermitian roundoff.
 //
+// Matrix-free P_K (same symmetrized operator, no \(d_{\mathrm{full}}\times d_{\mathrm{full}}\) storage)
+// ------------------------------------------------------------------------------------------
+// - `apply_translation_U_forward_vector` / `apply_translation_U_transpose_vector`: one signed translation \(U(R)\)
+//   or \(U(R)^T\) on a sector vector (same rules as `build_dense_translation_U`).
+// - `apply_symmetrized_P_K_vector_matrix_free`: \(P_K x=\frac12(P_{\mathrm{raw}}x+P_{\mathrm{raw}}^\dagger x)\) with
+//   \(P_{\mathrm{raw}}=\frac{1}{|G|}\sum_R \overline{\chi_K(R)}\,U(R)\), matching the Hermitianized dense matrix.
+//
 // Hamiltonian H (dense)
 // ---------------------
 // - Same `apply_extended_hubbard` as production (same `HubbardParams`, `hoppings`, `nn_pairs`).
@@ -34,6 +41,7 @@
 //
 // Use **only** for very small `d_full` (default cap 64): memory \(O(d_{\mathrm{full}}^2)\).
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -45,11 +53,96 @@
 #include "ftlm/hubbard_params.hpp"
 #include "ftlm/lattice.hpp"
 #include "ftlm/symmetry/momentum_sector.hpp"
+#include "ftlm/symmetry/raw_state.hpp"
 #include "ftlm/symmetry/translation_projector_dense.hpp"
 
 namespace ftlm {
 namespace symmetry {
 namespace tiny_pk {
+
+/// Column-major \(n\times n\) times vector: \(y = A x\) (overwrites `y`).
+inline void matvec_colmajor_vector(int n, const std::complex<double>* A_colmajor, const std::complex<double>* x,
+                                   std::complex<double>* y) {
+  for (int i = 0; i < n; ++i) {
+    std::complex<double> s{0.0, 0.0};
+    for (int j = 0; j < n; ++j) {
+      s += A_colmajor[static_cast<std::size_t>(i + j * n)] * x[static_cast<std::size_t>(j)];
+    }
+    y[static_cast<std::size_t>(i)] = s;
+  }
+}
+
+/// One translation move \(U(R)\ket{n}\) in the Fock basis: \((U x)_{n'} += \eta\, x_n\) with \(n'=\) index of \(R\ket{n}\).
+/// Same indexing as `detail::build_dense_translation_U` (fermionic sign, invalid images skipped).
+inline void apply_translation_U_forward_vector(const FockBasis& fb, int lx, int ly, int ex, int ey,
+                                               const std::complex<double>* x, std::complex<double>* out) {
+  const int d = fb.dim();
+  std::fill(out, out + d, std::complex<double>{0.0, 0.0});
+  for (int n = 0; n < d; ++n) {
+    const RawState s = detail::raw_from_fock_index(fb, n);
+    const RawState st = translate_raw_state_rect(s, lx, ly, ex, ey);
+    const int np = fb.index_of(static_cast<std::uint64_t>(st.up), static_cast<std::uint64_t>(st.dn));
+    if (np < 0) {
+      continue;
+    }
+    const double eta = fermionic_translation_sign_rect(s, lx, ly, ex, ey);
+    out[np] += std::complex<double>{eta, 0.0} * x[static_cast<std::size_t>(n)];
+  }
+}
+
+/// Adjoint for real signed permutation: \(U^\dagger = U^T\). Satisfies \((U^T x)_n = \eta\, x_{n'}\) with \(n'=\) index of
+/// \(R\ket{n}\) (same \(n'\) as forward row index for column \(n\)).
+inline void apply_translation_U_transpose_vector(const FockBasis& fb, int lx, int ly, int ex, int ey,
+                                                 const std::complex<double>* x, std::complex<double>* out) {
+  const int d = fb.dim();
+  std::fill(out, out + d, std::complex<double>{0.0, 0.0});
+  for (int n = 0; n < d; ++n) {
+    const RawState s = detail::raw_from_fock_index(fb, n);
+    const RawState st = translate_raw_state_rect(s, lx, ly, ex, ey);
+    const int np = fb.index_of(static_cast<std::uint64_t>(st.up), static_cast<std::uint64_t>(st.dn));
+    if (np < 0) {
+      continue;
+    }
+    const double eta = fermionic_translation_sign_rect(s, lx, ly, ex, ey);
+    out[static_cast<std::size_t>(n)] += std::complex<double>{eta, 0.0} * x[static_cast<std::size_t>(np)];
+  }
+}
+
+/// Matrix-free apply of the **same** Hermitian projector as the dense path: build \(P_{\mathrm{raw}}=\frac{1}{|G|}\sum_R
+/// \overline{\chi_K(R)}\,U(R)\), then \(P_K=\frac12(P_{\mathrm{raw}}+P_{\mathrm{raw}}^\dagger)\) entrywise matches
+/// `detail::hermitian_symmetrize_inplace` on the dense matrix. Implemented as
+/// \(P_K x=\frac12(P_{\mathrm{raw}}x+P_{\mathrm{raw}}^\dagger x)\).
+///
+/// **Stabilizers / orbits:** encoded in `translate_raw_state_rect` / `index_of` / fermionic sign — same as dense \(U(R)\).
+/// **Bloch weight:** \(\overline{\chi_K(R)}/|G|\) with \(|G|=L_x L_y\), same as `build_translation_projector_dense`.
+///
+/// `work` must hold at least `fb.dim()` elements (reused per group element internally).
+inline void apply_symmetrized_P_K_vector_matrix_free(const FockBasis& fb, int lx, int ly, MomentumSector K,
+                                                     const std::complex<double>* x, std::complex<double>* y_out,
+                                                     std::vector<std::complex<double>>* work) {
+  const int d = fb.dim();
+  work->resize(static_cast<std::size_t>(d));
+  const double invg = 1.0 / static_cast<double>(lx * ly);
+  std::vector<std::complex<double>> acc1(static_cast<std::size_t>(d), std::complex<double>{0.0, 0.0});
+  std::vector<std::complex<double>> acc2(static_cast<std::size_t>(d), std::complex<double>{0.0, 0.0});
+  for (int ey = 0; ey < ly; ++ey) {
+    for (int ex = 0; ex < lx; ++ex) {
+      const std::complex<double> w = std::conj(translation_bloch_phase(K, ex, ey)) * invg;
+      apply_translation_U_forward_vector(fb, lx, ly, ex, ey, x, work->data());
+      for (int i = 0; i < d; ++i) {
+        acc1[static_cast<std::size_t>(i)] += w * (*work)[static_cast<std::size_t>(i)];
+      }
+      apply_translation_U_transpose_vector(fb, lx, ly, ex, ey, x, work->data());
+      for (int i = 0; i < d; ++i) {
+        acc2[static_cast<std::size_t>(i)] += std::conj(w) * (*work)[static_cast<std::size_t>(i)];
+      }
+    }
+  }
+  for (int i = 0; i < d; ++i) {
+    y_out[static_cast<std::size_t>(i)] =
+        0.5 * (acc1[static_cast<std::size_t>(i)] + acc2[static_cast<std::size_t>(i)]);
+  }
+}
 
 inline void hermitian_symmetrize_flat(int n, std::vector<std::complex<double>>* M) {
   for (int i = 0; i < n; ++i) {
@@ -86,6 +179,34 @@ inline void vv_to_colmajor(const std::vector<std::vector<std::complex<double>>>&
       (*flat)[static_cast<std::size_t>(i + j * n)] = A[static_cast<std::size_t>(i)][static_cast<std::size_t>(j)];
     }
   }
+}
+
+/// Dense reference: symmetrized \(P_K\) matvec (same as `TinyPkHpkDense::p_colmajor` first factor).
+inline void apply_symmetrized_P_K_vector_dense(const FockBasis& fb, int lx, int ly, MomentumSector K,
+                                               const std::complex<double>* x, std::complex<double>* y_out,
+                                               std::vector<std::complex<double>>* p_flat_buf) {
+  const int d = fb.dim();
+  std::vector<std::vector<std::complex<double>>> p_vv;
+  detail::build_translation_projector_dense(fb, lx, ly, K, &p_vv);
+  detail::hermitian_symmetrize_inplace(&p_vv);
+  vv_to_colmajor(p_vv, p_flat_buf);
+  matvec_colmajor_vector(d, p_flat_buf->data(), x, y_out);
+}
+
+/// Full-sector \(y = P_K H P_K x\) with symmetrized \(P_K\) (matrix-free \(P_K\), dense \(H\) via `apply_extended_hubbard`).
+inline void apply_symmetrized_PK_H_PK_vector_matrix_free(const HubbardParams& p, const FockBasis& fb, int lx, int ly,
+                                                         MomentumSector K, const std::vector<SpinfulHopping>& hoppings,
+                                                         const std::vector<NearestPair>& nn_pairs,
+                                                         const std::complex<double>* x, std::complex<double>* y_out,
+                                                         std::vector<std::complex<double>>* w1,
+                                                         std::vector<std::complex<double>>* w2) {
+  const int d = fb.dim();
+  w1->resize(static_cast<std::size_t>(d));
+  w2->resize(static_cast<std::size_t>(d));
+  apply_symmetrized_P_K_vector_matrix_free(fb, lx, ly, K, x, w1->data(), w2);
+  std::fill(w2->begin(), w2->end(), std::complex<double>{0.0, 0.0});
+  apply_extended_hubbard(p, fb, hoppings, nn_pairs, w1->data(), w2->data());
+  apply_symmetrized_P_K_vector_matrix_free(fb, lx, ly, K, w2->data(), y_out, w1);
 }
 
 /// Dense sector Hamiltonian \(H\) with columns \(H e_j\) from `apply_extended_hubbard`.
