@@ -44,6 +44,8 @@ From `fltm_hub_cond/hubTri2Dcond_omp.f` (see also `notes.txt`):
 - P. Prelovšek and J. Bonča, *Strongly Correlated Systems* Springer SSSS Vol. 176 (2013), pp. 1–30.  
 - J. Kokalj and R. McKenzie, *Phys. Rev. Lett.* **110**, 206402 (2013).
 
+For a **field-by-field map** of Fortran arrays (CSR hops, `dnf`, Ritz weights) to **Z / ⟨N⟩** and what can be skipped for n(μ), see [`FTLM_FORTRAN_DATA_STRUCTURE_N_VS_MU.md`](./FTLM_FORTRAN_DATA_STRUCTURE_N_VS_MU.md).
+
 ## Takeaway for C++ FTLM (n vs μ)
 
 - **Reuse** the existing **sparse `H|v⟩`** and sector structure; **do not** copy triangular geometry or Fortran I/O.  
