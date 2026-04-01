@@ -603,7 +603,8 @@ int main(int argc, char** argv) {
   // rank(P) alone is unsafe vs k_out (see tests/test_k_gram_mismatch_scan.cpp).
   // `--kblock-prototype=orbit-matrix-free`: bridged T H_orb T^{-1} matvec for seed parity with Gram path when dims match.
   // `--kblock-prototype=orbit-direct`: Lanczos/FTLM in orbit coords via apply_orbit_k_block only (no Gram/Phi/T).
-  // Default (no flag): Gram-based HubbardMomentumBlock.
+  // Default (no --solver): translation-orbit K-block first when sector-safe; Gram-based HubbardMomentumBlock as fallback.
+  // `--solver=k-gram`: Gram + Phi + zheev only (no orbit-first).
   const char* kblock_prototype_arg = parse_string_arg(argc, argv, "kblock-prototype");
   bool kblock_proto_pkhpk_mf =
       kblock_prototype_arg != nullptr && std::strcmp(kblock_prototype_arg, "pkhpk-mf") == 0;
@@ -654,6 +655,12 @@ int main(int argc, char** argv) {
               << " (supported: pkhpk-mf, im-pk-reduced, orbit-matrix-free, orbit-direct)\n";
     return 2;
   }
+
+  // Translation-orbit representatives + matrix-free H_K (no Gram, no zheev); see docs/ORBIT_K_BLOCK_DESIGN.md.
+  // When --solver is omitted, prefer this path (Fortran-style parent/orbit indexing). Use --solver=k-gram for
+  // HubbardMomentumBlock (Gram + Bloch Φ + eigendecomposition).
+  const bool orbit_direct_allowed =
+      kblock_proto_orbit_direct || (!solver_set && solver == NmuSolver::KGram);
 #if !defined(_WIN32)
   if (mem_report_detail != 0) {
     (void)setenv("FTLM_MEM_REPORT_DETAIL", "1", 1);
@@ -716,6 +723,9 @@ int main(int argc, char** argv) {
   }
   if (gram_build_no_reuse != 0) {
     std::cout << "[ab] gram_build_no_reuse=1: release Gram-build scratch capacity after each K block\n";
+  }
+  if (orbit_direct_allowed && !kblock_proto_orbit_direct) {
+    std::cout << "[k-path] translation-orbit K-block tried first (no Gram); --solver=k-gram for Gram+Phi+zheev\n";
   }
   if (kblock_proto_pkhpk_mf) {
     std::cout << "[kblock-prototype] pkhpk-mf: matrix-free P_K H P_K on full sector when dim_full<=" << kPkhpkMfMaxDim
@@ -810,7 +820,7 @@ int main(int argc, char** argv) {
           // Conservative Step-3 gate: only mixed-spin, non-empty/non-full sectors where tiny parity tests are strongest.
           const bool orbit_mf_sector_safe = (nu > 0 && nd > 0 && nu < n_sites && nd < n_sites);
           const bool try_orbit_direct_here =
-              kblock_proto_orbit_direct && orbit_mf_sector_safe && dim_full > 0 && dim_full <= kOrbitMfMaxDim;
+              orbit_direct_allowed && orbit_mf_sector_safe && dim_full > 0 && dim_full <= kOrbitMfMaxDim;
           const bool try_orbit_mf_here =
               kblock_proto_orbit_mf && orbit_mf_sector_safe && dim_full > 0 && dim_full <= kOrbitMfMaxDim;
 
@@ -1220,16 +1230,22 @@ int main(int argc, char** argv) {
       file.flush();
     }
   }
+  const char* kblock_proto_metric = "none";
+  if (kblock_proto_pkhpk_mf) {
+    kblock_proto_metric = "pkhpk-mf";
+  } else if (kblock_proto_im_pk_reduced) {
+    kblock_proto_metric = "im-pk-reduced";
+  } else if (kblock_proto_orbit_mf) {
+    kblock_proto_metric = "orbit-matrix-free";
+  } else if (kblock_proto_orbit_direct) {
+    kblock_proto_metric = "orbit-direct";
+  } else if (orbit_direct_allowed) {
+    kblock_proto_metric = "orbit-direct-default";
+  }
   std::cout << "METRIC kind=FTLM_nmu_rect_k solver=" << (solver_set ? solver_label(solver) : "default")
             << " wall_time_s=" << t_wall << " wall_sector_logZ_s=" << t_sectors << " peak_rss_bytes=" << peak_b
             << " peak_rss_mib=" << peak_mib << " n_mu=" << n_mu << " gram_build_no_reuse=" << gram_build_no_reuse
-            << " kblock_prototype="
-            << (kblock_proto_pkhpk_mf ? "pkhpk-mf"
-                                      : (kblock_proto_im_pk_reduced ? "im-pk-reduced"
-                                                                     : (kblock_proto_orbit_direct
-                                                                            ? "orbit-direct"
-                                                                            : (kblock_proto_orbit_mf ? "orbit-matrix-free"
-                                                                                                    : "none"))));
+            << " kblock_prototype=" << kblock_proto_metric;
   if (kblock_proto_im_pk_reduced) {
     std::cout << " im_pk_gram_prefilter_k_in_zero_skip=" << im_pk_gram_prefilter_k_in_zero_skip;
   }
@@ -1238,7 +1254,7 @@ int main(int argc, char** argv) {
               << " orbit_mf_blocks_skipped_zero=" << orbit_mf_blocks_skipped_zero
               << " orbit_mf_dim_mismatch_rejected=" << orbit_mf_dim_mismatch_rejected;
   }
-  if (kblock_proto_orbit_direct) {
+  if (orbit_direct_blocks_used > 0 || orbit_direct_skipped_zero > 0) {
     std::cout << " orbit_direct_blocks_used=" << orbit_direct_blocks_used
               << " orbit_direct_skipped_zero=" << orbit_direct_skipped_zero;
   }

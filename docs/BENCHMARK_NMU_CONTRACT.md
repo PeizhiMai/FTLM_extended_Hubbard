@@ -12,7 +12,7 @@ This document locks the **regression contract** for grand-canonical density **n 
 The three-way script runs, in order:
 
 1. **`build/ftlm_bench_ftlm_nmu_rect`** — particle sectors, no momentum (`--Lx=3 --Ly=2 …`)
-2. **`build/ftlm_bench_ftlm_nmu_rect_k`** — momentum k-blocks (same μ grid and FTLM params)
+2. **`build/ftlm_bench_ftlm_nmu_rect_k`** — momentum k-blocks (same μ grid and FTLM params). **Default** (no `--solver`): tries the **translation-orbit** matrix-free block (`OrbitKBlockBasis` + `apply_orbit_k_block`, no Gram) when the sector gate allows; falls back to the Gram/Φ production block otherwise. Use **`--solver=k-gram`** to force the legacy Gram path everywhere.
 3. **NumPy ED** via `benchmarks/hubbard_rect_ed.py` / `plot_n_vs_mu.py` helpers
 
 Outputs (regenerated each run):
