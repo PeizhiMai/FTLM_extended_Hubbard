@@ -8,6 +8,8 @@
 namespace ftlm {
 
 /// Reusable buffers for `lanczos_tridiagonal` (three-term recurrence: only q, q_prev, w — no full Krylov basis).
+/// Contrast: Fortran FTLM reference codes often store all Lanczos columns (e.g. `phia(np,1:L)`); see
+/// `docs/FTLM_HUB_COND_LANCZOS_REFERENCE.md`.
 /// Pass through `FtlmParams::lanczos_ws` to reuse across multiple K-blocks in the same sector without reallocating
 /// O(dim) complex vectors per FTLM call.
 struct LanczosComplexWorkspace {
