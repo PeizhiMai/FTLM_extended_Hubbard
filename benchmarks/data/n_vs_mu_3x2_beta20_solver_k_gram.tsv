@@ -1,5 +1,5 @@
 # FTLM grand canonical (rect k-block) Lx=3 Ly=2 beta=20 t=1 tp=-0.35 U=5.75 V=0.9
-# ftlm_random=12 lanczos_steps=72 sector_time_s=15.9524
+# ftlm_random=12 lanczos_steps=72 sector_time_s=15.7815
 -5	2.59545e-20
 -4.86364	3.96874e-19
 -4.72727	6.06865e-18
@@ -221,4 +221,4 @@
 24.7273	2
 24.8636	2
 25	2
-# wall_time_s=15.9545 peak_rss_bytes=4.33644e+07 peak_rss_mib=41.3555
+# wall_time_s=15.7828 peak_rss_bytes=3.87195e+07 peak_rss_mib=36.9258

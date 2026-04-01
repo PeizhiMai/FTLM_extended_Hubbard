@@ -1,0 +1,316 @@
+=== 3×2 four-solver benchmark: β=20, μ∈[-5,25], n_μ=221, Lanczos=72, random=12, seed=7 ===
+date: 2026-04-01T00:31:58Z
+
+--- 1) solver=nonmom (particle sectors, no momentum) ---
+=== FTLM grand-canonical n(mu)  3x2  beta=20  solver=nonmom ===
+t=1 tp=-0.35 U=5.75 V=0.9
+ftlm_random=12 lanczos_steps=72  sectors=49
+[monitor] wall time + peak RSS reported at exit (disable with --no-monitor=1)
+sector (0,0) dim=1 logZ=-0
+sector (0,1) dim=6 logZ=55.7806
+sector (0,2) dim=15 logZ=87.4452
+sector (0,3) dim=20 logZ=101.677
+sector (0,4) dim=15 logZ=95.2348
+sector (0,5) dim=6 logZ=-55.4993
+sector (0,6) dim=1 logZ=-216
+sector (1,0) dim=6 logZ=55.7806
+sector (1,1) dim=36 logZ=89.3079
+sector (1,2) dim=90 logZ=102.043
+sector (1,3) dim=120 logZ=95.5678
+sector (1,4) dim=90 logZ=38.0372
+sector (1,5) dim=36 logZ=-129.717
+sector (1,6) dim=6 logZ=-346.735
+sector (2,0) dim=15 logZ=87.4452
+sector (2,1) dim=90 logZ=101.552
+sector (2,2) dim=225 logZ=94.9848
+sector (2,3) dim=300 logZ=46.8748
+sector (2,4) dim=225 logZ=-48.1531
+sector (2,5) dim=90 logZ=-250.008
+sector (2,6) dim=15 logZ=-502.636
+sector (3,0) dim=20 logZ=101.677
+sector (3,1) dim=120 logZ=94.8968
+sector (3,2) dim=300 logZ=47.0545
+sector (3,3) dim=400 logZ=-33.6944
+sector (3,4) dim=300 logZ=-157.356
+sector (3,5) dim=120 logZ=-398.072
+sector (3,6) dim=20 logZ=-675.204
+sector (4,0) dim=15 logZ=95.2348
+sector (4,1) dim=90 logZ=38.7446
+sector (4,2) dim=225 logZ=-47.4822
+sector (4,3) dim=300 logZ=-157.545
+sector (4,4) dim=225 logZ=-297.465
+sector (4,5) dim=90 logZ=-575.028
+sector (4,6) dim=15 logZ=-869.017
+sector (5,0) dim=6 logZ=-55.4993
+sector (5,1) dim=36 logZ=-129.856
+sector (5,2) dim=90 logZ=-249.903
+sector (5,3) dim=120 logZ=-397.934
+sector (5,4) dim=90 logZ=-574.815
+sector (5,5) dim=36 logZ=-868.95
+sector (5,6) dim=6 logZ=-1206.19
+sector (6,0) dim=1 logZ=-216
+sector (6,1) dim=6 logZ=-346.735
+sector (6,2) dim=15 logZ=-502.636
+sector (6,3) dim=20 logZ=-675.204
+sector (6,4) dim=15 logZ=-869.017
+sector (6,5) dim=6 logZ=-1206.19
+sector (6,6) dim=1 logZ=-1554
+[timing] all sectors logZ: 6.82919 s
+wrote /Users/cosdis/Desktop/AI_builder/ftlm_extended_hubbard/benchmarks/data/n_vs_mu_3x2_beta20_solver_nonmom.tsv
+[monitor] wall_time_s=6.83161  wall_sector_logZ_s=6.82919  peak_rss_mib=6.52344  peak_rss_bytes=6.84032e+06
+METRIC kind=FTLM_nmu_rect solver=nonmom Lx=3 Ly=2 beta=20 wall_time_s=6.83161 wall_sector_logZ_s=6.82919 peak_rss_bytes=6.84032e+06 peak_rss_mib=6.52344 n_mu=221
+        6.84 real         6.76 user         0.03 sys
+             6840320  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                1951  page reclaims
+                  12  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  16  voluntary context switches
+                4708  involuntary context switches
+        181529881023  instructions retired
+         26927809650  cycles elapsed
+             5699600  peak memory footprint
+
+--- 2) solver=k-gram (HubbardMomentumBlock / Gram) ---
+=== FTLM grand-canonical n(mu) 3x2 with momentum blocks ===
+[solver] k-gram
+beta=20  t=1 tp=-0.35 U=5.75 V=0.9
+ftlm_random=12 lanczos_steps=72  sectors=49
+[monitor] wall time + peak RSS reported at exit (disable with --no-monitor=1)
+sector (0,0) dim_full=1 dim_k_total=1 ed_blocks=1 ftlm_blocks=0 logZ=-0
+sector (0,1) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=56.0007
+sector (0,2) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=87.2975
+sector (0,3) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=101.461
+sector (0,4) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=95.2975
+sector (0,5) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-55.3069
+sector (0,6) dim_full=1 dim_k_total=0 ed_blocks=0 ftlm_blocks=0 logZ=-inf
+sector (1,0) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=56.0007
+sector (1,1) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=89.0648
+sector (1,2) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=101.832
+sector (1,3) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
+sector (1,4) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=38.6127
+sector (1,5) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-129.938
+sector (1,6) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-346.999
+sector (2,0) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=87.2975
+sector (2,1) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=101.832
+sector (2,2) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
+sector (2,3) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=47.1732
+sector (2,4) dim_full=225 dim_k_total=216 ed_blocks=6 ftlm_blocks=0 logZ=-47.8816
+sector (2,5) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-250.114
+sector (2,6) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=-502.625
+sector (3,0) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=101.461
+sector (3,1) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
+sector (3,2) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=47.1732
+sector (3,3) dim_full=400 dim_k_total=400 ed_blocks=0 ftlm_blocks=6 logZ=-33.5301
+sector (3,4) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=-157.474
+sector (3,5) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=-398.007
+sector (3,6) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=-675.539
+sector (4,0) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=95.2975
+sector (4,1) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=38.6127
+sector (4,2) dim_full=225 dim_k_total=216 ed_blocks=6 ftlm_blocks=0 logZ=-47.8816
+sector (4,3) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=-157.474
+sector (4,4) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=-297.607
+sector (4,5) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-574.82
+sector (4,6) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (5,0) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-55.3069
+sector (5,1) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-129.938
+sector (5,2) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-250.114
+sector (5,3) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=-398.007
+sector (5,4) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-574.82
+sector (5,5) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (5,6) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-1206.31
+sector (6,0) dim_full=1 dim_k_total=0 ed_blocks=0 ftlm_blocks=0 logZ=-inf
+sector (6,1) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-346.999
+sector (6,2) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=-502.625
+sector (6,3) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=-675.539
+sector (6,4) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (6,5) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-1206.31
+sector (6,6) dim_full=1 dim_k_total=1 ed_blocks=1 ftlm_blocks=0 logZ=-1554
+[timing] all sectors logZ: 15.7815 s
+wrote /Users/cosdis/Desktop/AI_builder/ftlm_extended_hubbard/benchmarks/data/n_vs_mu_3x2_beta20_solver_k_gram.tsv
+[monitor] wall_time_s=15.7828  wall_sector_logZ_s=15.7815  peak_rss_mib=36.9258  peak_rss_bytes=3.87195e+07
+METRIC kind=FTLM_nmu_rect_k solver=k-gram wall_time_s=15.7828 wall_sector_logZ_s=15.7815 peak_rss_bytes=3.87195e+07 peak_rss_mib=36.9258 n_mu=221 gram_build_no_reuse=0 kblock_prototype=none
+       15.79 real        16.02 user         0.26 sys
+            38731776  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                9669  page reclaims
+                   3  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  13  voluntary context switches
+               44996  involuntary context switches
+        372200513971  instructions retired
+         64171181826  cycles elapsed
+            37702032  peak memory footprint
+
+--- 3) solver=k-orbit (orbit-direct k-block) ---
+=== FTLM grand-canonical n(mu) 3x2 with momentum blocks ===
+[solver] k-orbit
+beta=20  t=1 tp=-0.35 U=5.75 V=0.9
+ftlm_random=12 lanczos_steps=72  sectors=49
+[monitor] wall time + peak RSS reported at exit (disable with --no-monitor=1)
+[kblock-prototype] orbit-direct: OrbitKBlockBasis + apply_orbit_k_block in orbit coords (no Phi Gram, no T bridge); dim_full<=512
+sector (0,0) dim_full=1 dim_k_total=1 ed_blocks=1 ftlm_blocks=0 logZ=-0
+sector (0,1) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=56.0007
+sector (0,2) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=87.2975
+sector (0,3) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=101.461
+sector (0,4) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=95.2975
+sector (0,5) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-55.3069
+sector (0,6) dim_full=1 dim_k_total=0 ed_blocks=0 ftlm_blocks=0 logZ=-inf
+sector (1,0) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=56.0007
+sector (1,1) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=89.0648
+sector (1,2) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=101.832
+sector (1,3) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
+sector (1,4) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=38.6127
+sector (1,5) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-129.938
+sector (1,6) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-346.999
+sector (2,0) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=87.2975
+sector (2,1) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=101.832
+sector (2,2) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
+sector (2,3) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=47.1732
+sector (2,4) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=-47.8381
+sector (2,5) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-250.114
+sector (2,6) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=-502.625
+sector (3,0) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=101.461
+sector (3,1) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
+sector (3,2) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=47.1732
+sector (3,3) dim_full=400 dim_k_total=400 ed_blocks=0 ftlm_blocks=6 logZ=-34.0336
+sector (3,4) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=-157.474
+sector (3,5) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=-398.007
+sector (3,6) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=-675.539
+sector (4,0) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=95.2975
+sector (4,1) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=38.6127
+sector (4,2) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=-47.8381
+sector (4,3) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=-157.474
+sector (4,4) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=-297.607
+sector (4,5) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-574.82
+sector (4,6) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (5,0) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-55.3069
+sector (5,1) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-129.938
+sector (5,2) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-250.114
+sector (5,3) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=-398.007
+sector (5,4) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-574.82
+sector (5,5) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (5,6) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-1206.31
+sector (6,0) dim_full=1 dim_k_total=0 ed_blocks=0 ftlm_blocks=0 logZ=-inf
+sector (6,1) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-346.999
+sector (6,2) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=-502.625
+sector (6,3) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=-675.539
+sector (6,4) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (6,5) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-1206.31
+sector (6,6) dim_full=1 dim_k_total=1 ed_blocks=1 ftlm_blocks=0 logZ=-1554
+[timing] all sectors logZ: 9.05681 s
+wrote /Users/cosdis/Desktop/AI_builder/ftlm_extended_hubbard/benchmarks/data/n_vs_mu_3x2_beta20_solver_k_orbit.tsv
+[monitor] wall_time_s=9.05825  wall_sector_logZ_s=9.05681  peak_rss_mib=6.49609  peak_rss_bytes=6.81165e+06
+METRIC kind=FTLM_nmu_rect_k solver=k-orbit wall_time_s=9.05825 wall_sector_logZ_s=9.05681 peak_rss_bytes=6.81165e+06 peak_rss_mib=6.49609 n_mu=221 gram_build_no_reuse=0 kblock_prototype=orbit-direct orbit_direct_blocks_used=150 orbit_direct_skipped_zero=0
+        9.07 real         8.95 user         0.03 sys
+             6811648  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                2140  page reclaims
+                   1  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  23  voluntary context switches
+                6311  involuntary context switches
+        201094006471  instructions retired
+         35629199779  cycles elapsed
+             5576288  peak memory footprint
+
+--- 4) solver=ed (dense exact per momentum block) ---
+=== FTLM grand-canonical n(mu) 3x2 with momentum blocks ===
+[solver] ed  ed_cutoff=536870911
+beta=20  t=1 tp=-0.35 U=5.75 V=0.9
+ftlm_random=12 lanczos_steps=72  sectors=49
+[monitor] wall time + peak RSS reported at exit (disable with --no-monitor=1)
+sector (0,0) dim_full=1 dim_k_total=1 ed_blocks=1 ftlm_blocks=0 logZ=-0
+sector (0,1) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=56.0007
+sector (0,2) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=87.2975
+sector (0,3) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=101.461
+sector (0,4) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=95.2975
+sector (0,5) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-55.3069
+sector (0,6) dim_full=1 dim_k_total=0 ed_blocks=0 ftlm_blocks=0 logZ=-inf
+sector (1,0) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=56.0007
+sector (1,1) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=89.0648
+sector (1,2) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=101.832
+sector (1,3) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
+sector (1,4) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=38.6127
+sector (1,5) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-129.938
+sector (1,6) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-346.999
+sector (2,0) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=87.2975
+sector (2,1) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=101.832
+sector (2,2) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
+sector (2,3) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=47.1732
+sector (2,4) dim_full=225 dim_k_total=216 ed_blocks=6 ftlm_blocks=0 logZ=-47.8816
+sector (2,5) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-250.114
+sector (2,6) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=-502.625
+sector (3,0) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=101.461
+sector (3,1) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
+sector (3,2) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=47.1732
+sector (3,3) dim_full=400 dim_k_total=400 ed_blocks=6 ftlm_blocks=0 logZ=-33.8902
+sector (3,4) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=-157.474
+sector (3,5) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=-398.007
+sector (3,6) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=-675.539
+sector (4,0) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=95.2975
+sector (4,1) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=38.6127
+sector (4,2) dim_full=225 dim_k_total=216 ed_blocks=6 ftlm_blocks=0 logZ=-47.8816
+sector (4,3) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=-157.474
+sector (4,4) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=-297.607
+sector (4,5) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-574.82
+sector (4,6) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (5,0) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-55.3069
+sector (5,1) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-129.938
+sector (5,2) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-250.114
+sector (5,3) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=-398.007
+sector (5,4) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-574.82
+sector (5,5) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (5,6) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-1206.31
+sector (6,0) dim_full=1 dim_k_total=0 ed_blocks=0 ftlm_blocks=0 logZ=-inf
+sector (6,1) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-346.999
+sector (6,2) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=-502.625
+sector (6,3) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=-675.539
+sector (6,4) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (6,5) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-1206.31
+sector (6,6) dim_full=1 dim_k_total=1 ed_blocks=1 ftlm_blocks=0 logZ=-1554
+[timing] all sectors logZ: 8.7816 s
+wrote /Users/cosdis/Desktop/AI_builder/ftlm_extended_hubbard/benchmarks/data/n_vs_mu_3x2_beta20_solver_ed.tsv
+[monitor] wall_time_s=8.78316  wall_sector_logZ_s=8.7816  peak_rss_mib=35.9023  peak_rss_bytes=3.76463e+07
+METRIC kind=FTLM_nmu_rect_k solver=ed wall_time_s=8.78316 wall_sector_logZ_s=8.7816 peak_rss_bytes=3.76463e+07 peak_rss_mib=35.9023 n_mu=221 gram_build_no_reuse=0 kblock_prototype=none
+        8.80 real         9.02 user         0.25 sys
+            37691392  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               10218  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                  24  voluntary context switches
+               42895  involuntary context switches
+        200993428149  instructions retired
+         36231986142  cycles elapsed
+            38459768  peak memory footprint
+
+Done. TSVs under /Users/cosdis/Desktop/AI_builder/ftlm_extended_hubbard/benchmarks/data/n_vs_mu_3x2_beta20_solver_*.tsv

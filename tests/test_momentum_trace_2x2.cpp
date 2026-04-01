@@ -15,6 +15,22 @@
 
 namespace {
 
+/// True if `HubbardMomentumAction` Gram path yields at least one nonzero momentum block for this sector.
+/// When every `momentum_block_dim` is zero (raw Bloch columns nearly null after JW/phase; see
+/// `test_momentum_gram_debug_2x2_n0_n2.cpp`), there is no reduced basis and the trace-sum identity below does not apply.
+bool sector_has_any_momentum_block(const ftlm::symmetry::HubbardMomentumAction& hub,
+                                   const ftlm::symmetry::MomentumSectorMap& map, int lx, int ly, int nu, int nd) {
+  for (int ky = 0; ky < ly; ++ky) {
+    for (int kx = 0; kx < lx; ++kx) {
+      const ftlm::symmetry::MomentumSector K{kx, ky, lx, ly};
+      if (hub.momentum_block_dim(map, K, nu, nd) > 0) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 double full_sector_trace(const ftlm::HubbardParams& p, const ftlm::FockBasis& fb,
                          const std::vector<ftlm::SpinfulHopping>& hops,
                          const std::vector<ftlm::NearestPair>& pairs) {
@@ -88,6 +104,10 @@ int main() {
                                                     static_cast<std::uint16_t>(fb.down_mask(i))});
       }
       const auto map = ftlm::symmetry::build_momentum_sector_map_rect(std::move(universe), 2, 2);
+
+      if (!sector_has_any_momentum_block(hub, map, 2, 2, nu, nd)) {
+        continue;
+      }
 
       const double tr_full = full_sector_trace(p, fb, hops, pairs);
       const double tr_k = momentum_block_trace_sum(hub, map, 2, 2, nu, nd);

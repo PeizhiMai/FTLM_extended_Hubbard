@@ -94,6 +94,10 @@ struct HubbardMomentumBlock {
 
   void apply(const std::complex<double>* x, std::complex<double>* y) const;
 
+  /// Same \(\Phi^\dagger\) / \(\Phi\) as `apply` (matrix-free Gram data). For tests that compare full-space vectors.
+  void project_full_to_block(const std::complex<double>* v_full, std::complex<double>* x_block) const;
+  void lift_block_to_full(const std::complex<double>* x_block, std::complex<double>* v_full) const;
+
   /// Persistent storage for Gram eigenvectors + seeds (no dense \(\Phi\)); bytes of complex `V` etc.
   std::size_t phi_bytes() const noexcept { return gram_.storage_bytes(); }
   std::size_t gram_v_bytes() const noexcept { return gram_.v_bytes(); }

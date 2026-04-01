@@ -1,8 +1,17 @@
 // Grand-canonical n(mu) at fixed beta via FTLM using translation-symmetry momentum blocks.
+//
+// Solver selection (`ftlm_bench_ftlm_nmu_rect_k`):
+//   --solver=k-gram     — production Gram / HubbardMomentumBlock (default when no --solver)
+//   --solver=k-orbit    — orbit k-block (same as --kblock-prototype=orbit-direct)
+//   --solver=nonmom     — particle-sector FTLM without momentum (same as ftlm_bench_ftlm_nmu_rect)
+//   --solver=ed         — dense exact diagonalization per momentum block (large --ed-cutoff; use --ed-cutoff to cap)
+//
+// Legacy: `--kblock-prototype=...` still works when `--solver` is omitted.
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -20,16 +29,82 @@
 
 #include "ftlm/fock_basis.hpp"
 #include "ftlm/ftlm_thermo.hpp"
+#include "ftlm/hubbard_hamiltonian.hpp"
 #include "ftlm/hubbard_params.hpp"
+#include "ftlm/lattice.hpp"
 #include "ftlm/symmetry/hubbard_momentum_action.hpp"
 #include "ftlm/symmetry/k_basis.hpp"
+#include "ftlm/symmetry/k_block_im_pk_reduced.hpp"
 #include "ftlm/symmetry/k_block_pk_tiny_dense.hpp"
 #include "ftlm/symmetry/momentum_sector.hpp"
+#include "ftlm/symmetry/orbit_bloch_phi.hpp"
+#include "ftlm/symmetry/orbit_k_block_basis.hpp"
 #include "ftlm/symmetry/raw_state.hpp"
 
 namespace {
 
 using clock = std::chrono::high_resolution_clock;
+using C = std::complex<double>;
+
+// Small dense helpers for orbit–Gram bridge (T = Phi^dagger O): FTLM/Lanczos uses Gram ONB coordinates.
+void swap_rows_cm(int nrows, int ncols, C* a, int r1, int r2) {
+  if (r1 == r2) {
+    return;
+  }
+  for (int j = 0; j < ncols; ++j) {
+    std::swap(a[r1 + j * nrows], a[r2 + j * nrows]);
+  }
+}
+
+bool invert_colmajor_gauss_jordan(int n, std::vector<C>* a) {
+  const int ncol = 2 * n;
+  std::vector<C> aug(static_cast<std::size_t>(n * ncol), C(0.0, 0.0));
+  for (int j = 0; j < n; ++j) {
+    for (int i = 0; i < n; ++i) {
+      aug[static_cast<std::size_t>(i + j * n)] = (*a)[static_cast<std::size_t>(i + j * n)];
+    }
+  }
+  for (int j = 0; j < n; ++j) {
+    aug[static_cast<std::size_t>(j + (n + j) * n)] = C(1.0, 0.0);
+  }
+  for (int col = 0; col < n; ++col) {
+    int piv = col;
+    double best = std::abs(aug[static_cast<std::size_t>(col + col * n)]);
+    for (int r = col + 1; r < n; ++r) {
+      const double v = std::abs(aug[static_cast<std::size_t>(r + col * n)]);
+      if (v > best) {
+        best = v;
+        piv = r;
+      }
+    }
+    if (best < 1e-18) {
+      return false;
+    }
+    swap_rows_cm(n, ncol, aug.data(), col, piv);
+    const C invd = C(1.0, 0.0) / aug[static_cast<std::size_t>(col + col * n)];
+    for (int j = 0; j < ncol; ++j) {
+      aug[static_cast<std::size_t>(col + j * n)] *= invd;
+    }
+    for (int r = 0; r < n; ++r) {
+      if (r == col) {
+        continue;
+      }
+      const C f = aug[static_cast<std::size_t>(r + col * n)];
+      if (std::abs(f) < 1e-28) {
+        continue;
+      }
+      for (int j = 0; j < ncol; ++j) {
+        aug[static_cast<std::size_t>(r + j * n)] -= f * aug[static_cast<std::size_t>(col + j * n)];
+      }
+    }
+  }
+  for (int j = 0; j < n; ++j) {
+    for (int i = 0; i < n; ++i) {
+      (*a)[static_cast<std::size_t>(i + j * n)] = aug[static_cast<std::size_t>(i + (n + j) * n)];
+    }
+  }
+  return true;
+}
 
 double parse_double_arg(int argc, char** argv, const char* key, double default_value) {
   const std::string prefix = std::string("--") + key + "=";
@@ -260,9 +335,230 @@ double exact_log_partition_small_complex(
   return std::log(0.5) + max_t + std::log(sum);
 }
 
+enum class NmuSolver { KGram, KOrbit, NonMom, Ed };
+
+bool parse_solver_name(const char* s, NmuSolver* out) {
+  if (s == nullptr) {
+    return false;
+  }
+  if (std::strcmp(s, "k-gram") == 0 || std::strcmp(s, "k_block_gram") == 0 || std::strcmp(s, "gram") == 0 ||
+      std::strcmp(s, "production") == 0) {
+    *out = NmuSolver::KGram;
+    return true;
+  }
+  if (std::strcmp(s, "k-orbit") == 0 || std::strcmp(s, "orbit") == 0 || std::strcmp(s, "orbit-direct") == 0) {
+    *out = NmuSolver::KOrbit;
+    return true;
+  }
+  if (std::strcmp(s, "nonmom") == 0 || std::strcmp(s, "nomom") == 0 || std::strcmp(s, "non-momentum") == 0) {
+    *out = NmuSolver::NonMom;
+    return true;
+  }
+  if (std::strcmp(s, "ed") == 0 || std::strcmp(s, "exact") == 0) {
+    *out = NmuSolver::Ed;
+    return true;
+  }
+  return false;
+}
+
+const char* solver_label(NmuSolver s) {
+  switch (s) {
+    case NmuSolver::KGram:
+      return "k-gram";
+    case NmuSolver::KOrbit:
+      return "k-orbit";
+    case NmuSolver::NonMom:
+      return "nonmom";
+    case NmuSolver::Ed:
+      return "ed";
+  }
+  return "?";
+}
+
+/// Same physics as `ftlm_bench_ftlm_nmu_rect`: particle-sector FTLM (no momentum blocks).
+int run_nonmom_solver(int argc, char** argv) {
+  const int Lx = parse_int_arg(argc, argv, "Lx", 4);
+  const int Ly = parse_int_arg(argc, argv, "Ly", 2);
+  if (Lx <= 0 || Ly <= 0 || Lx * Ly > 16) {
+    std::cerr << "bench_ftlm_nmu_rect_k (--solver=nonmom): requires 1 <= Lx*Ly <= 16\n";
+    return 2;
+  }
+
+  const double beta = parse_double_arg(argc, argv, "beta", 20.0);
+  const double mu_min = parse_double_arg(argc, argv, "mu-min", -5.0);
+  const double mu_max = parse_double_arg(argc, argv, "mu-max", 25.0);
+  const int n_mu = std::max(2, parse_int_arg(argc, argv, "n-mu", 221));
+  const int n_rand = parse_int_arg(argc, argv, "ftlm-random", 12);
+  const int lz_steps = parse_int_arg(argc, argv, "lanczos-steps", 72);
+  const unsigned fseed = static_cast<unsigned>(parse_int_arg(argc, argv, "seed", 7));
+  const char* out_path = parse_string_arg(argc, argv, "out");
+  const int no_monitor = parse_int_arg(argc, argv, "no-monitor", 0);
+
+  const auto t_wall0 = clock::now();
+
+  ftlm::HubbardParams p;
+  p.Lx = Lx;
+  p.Ly = Ly;
+  p.t = parse_double_arg(argc, argv, "t", 1.0);
+  p.tp = parse_double_arg(argc, argv, "tp", -0.35);
+  p.U = parse_double_arg(argc, argv, "U", 5.75);
+  p.V = parse_double_arg(argc, argv, "V", 0.9);
+  p.phi_x = 0.0;
+  p.phi_y = 0.0;
+
+  const int n_sites = Lx * Ly;
+  ftlm::RectLattice lat{p.Lx, p.Ly};
+  std::vector<ftlm::SpinfulHopping> hops;
+  std::vector<ftlm::NearestPair> pairs;
+  ftlm::build_hubbard_geometry(p, lat, &hops, &pairs);
+
+  ftlm::FtlmParams fpar;
+  fpar.n_random = n_rand;
+  fpar.lanczos_steps = lz_steps;
+  fpar.seed = fseed;
+
+  const int nsec = (n_sites + 1) * (n_sites + 1);
+  std::vector<double> logZ(static_cast<size_t>(nsec), -std::numeric_limits<double>::infinity());
+  std::vector<int> Nelec(static_cast<size_t>(nsec), 0);
+  std::vector<int> dims(static_cast<size_t>(nsec), 0);
+
+  std::cout << "=== FTLM grand-canonical n(mu)  " << Lx << "x" << Ly << "  beta=" << beta << "  solver=nonmom ===\n";
+  std::cout << "t=" << p.t << " tp=" << p.tp << " U=" << p.U << " V=" << p.V << "\n";
+  std::cout << "ftlm_random=" << n_rand << " lanczos_steps=" << lz_steps << "  sectors=" << nsec << "\n";
+  if (!no_monitor) {
+    std::cout << "[monitor] wall time + peak RSS reported at exit (disable with --no-monitor=1)\n";
+  }
+
+  const auto t0 = clock::now();
+  std::vector<std::complex<double>> xc;
+  std::vector<std::complex<double>> yc;
+
+  for (int nu = 0; nu <= n_sites; ++nu) {
+    for (int nd = 0; nd <= n_sites; ++nd) {
+      const int idx = sector_index(nu, nd, n_sites);
+      Nelec[static_cast<size_t>(idx)] = nu + nd;
+      ftlm::FockBasis basis(n_sites, nu, nd);
+      const int dim = basis.dim();
+      dims[static_cast<size_t>(idx)] = dim;
+      if (dim <= 0) {
+        continue;
+      }
+      xc.assign(static_cast<size_t>(dim), {0.0, 0.0});
+      yc.assign(static_cast<size_t>(dim), {0.0, 0.0});
+
+      auto apply_real = [&](const double* x, double* y) {
+        for (int i = 0; i < dim; ++i) {
+          xc[static_cast<size_t>(i)] = {x[static_cast<size_t>(i)], 0.0};
+        }
+        ftlm::apply_extended_hubbard(p, basis, hops, pairs, xc.data(), yc.data());
+        for (int i = 0; i < dim; ++i) {
+          y[static_cast<size_t>(i)] = yc[static_cast<size_t>(i)].real();
+        }
+      };
+
+      const double lz = ftlm::ftlm_log_partition_real(dim, apply_real, beta, fpar);
+      logZ[static_cast<size_t>(idx)] = lz;
+      std::cerr << "sector (" << nu << "," << nd << ") dim=" << dim << " logZ=" << lz << "\n";
+    }
+  }
+  const double t_sectors = std::chrono::duration<double>(clock::now() - t0).count();
+  std::cout << "[timing] all sectors logZ: " << t_sectors << " s\n";
+
+  std::ostream* out = &std::cout;
+  std::ofstream file;
+  if (out_path) {
+    file.open(out_path);
+    if (!file) {
+      std::cerr << "bench_ftlm_nmu_rect_k (--solver=nonmom): cannot open " << out_path << "\n";
+      return 2;
+    }
+    out = &file;
+  }
+
+  *out << "# FTLM grand canonical  Lx=" << Lx << " Ly=" << Ly << "  beta=" << beta << "  t=" << p.t
+       << " tp=" << p.tp << " U=" << p.U << " V=" << p.V << "  solver=nonmom\n";
+  *out << "# ftlm_random=" << n_rand << " lanczos_steps=" << lz_steps << "  sector_time_s=" << t_sectors << "\n";
+
+  for (int k = 0; k < n_mu; ++k) {
+    const double tmu = static_cast<double>(k) / static_cast<double>(n_mu - 1);
+    const double mu = mu_min + tmu * (mu_max - mu_min);
+
+    double mx = -std::numeric_limits<double>::infinity();
+    for (int i = 0; i < nsec; ++i) {
+      const double lz = logZ[static_cast<size_t>(i)];
+      if (!std::isfinite(lz)) {
+        continue;
+      }
+      const int N = Nelec[static_cast<size_t>(i)];
+      const double ex = lz + beta * mu * static_cast<double>(N);
+      mx = std::max(mx, ex);
+    }
+    if (!std::isfinite(mx)) {
+      *out << mu << "\t0\n";
+      continue;
+    }
+    double sum_w = 0.0;
+    double sum_Nw = 0.0;
+    for (int i = 0; i < nsec; ++i) {
+      const double lz = logZ[static_cast<size_t>(i)];
+      if (!std::isfinite(lz)) {
+        continue;
+      }
+      const int N = Nelec[static_cast<size_t>(i)];
+      const double ex = lz + beta * mu * static_cast<double>(N) - mx;
+      const double w = std::exp(ex);
+      sum_w += w;
+      sum_Nw += static_cast<double>(N) * w;
+    }
+    const double n_avg = (sum_w > 0.0) ? (sum_Nw / sum_w) / static_cast<double>(n_sites) : 0.0;
+    *out << mu << "\t" << n_avg << "\n";
+  }
+
+  if (out_path) {
+    std::cout << "wrote " << out_path << "\n";
+  }
+
+  const double t_wall = std::chrono::duration<double>(clock::now() - t_wall0).count();
+  const double peak_b = peak_rss_bytes_self();
+  const double peak_mib = peak_b / (1024.0 * 1024.0);
+  if (!no_monitor) {
+    std::cout << "[monitor] wall_time_s=" << t_wall << "  wall_sector_logZ_s=" << t_sectors
+              << "  peak_rss_mib=" << peak_mib << "  peak_rss_bytes=" << peak_b << "\n";
+    if (out_path && file.is_open()) {
+      *out << "# wall_time_s=" << t_wall << "  peak_rss_bytes=" << peak_b << "  peak_rss_mib=" << peak_mib
+           << "\n";
+      file.flush();
+    }
+  }
+
+  std::cout << "METRIC kind=FTLM_nmu_rect solver=nonmom Lx=" << Lx << " Ly=" << Ly << " beta=" << beta
+            << " wall_time_s=" << t_wall << " wall_sector_logZ_s=" << t_sectors << " peak_rss_bytes=" << peak_b
+            << " peak_rss_mib=" << peak_mib << " n_mu=" << n_mu;
+  if (no_monitor) {
+    std::cout << " no_monitor=1";
+  }
+  std::cout << "\n";
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
+  const char* solver_arg = parse_string_arg(argc, argv, "solver");
+  NmuSolver solver = NmuSolver::KGram;
+  bool solver_set = false;
+  if (solver_arg != nullptr) {
+    if (!parse_solver_name(solver_arg, &solver)) {
+      std::cerr << "bench_ftlm_nmu_rect_k: unknown --solver=" << solver_arg
+                << " (supported: k-gram, k-orbit, nonmom, ed)\n";
+      return 2;
+    }
+    solver_set = true;
+  }
+  if (solver_set && solver == NmuSolver::NonMom) {
+    return run_nonmom_solver(argc, argv);
+  }
+
   const int Lx = parse_int_arg(argc, argv, "Lx", 4);
   const int Ly = parse_int_arg(argc, argv, "Ly", 3);
   if (Lx <= 0 || Ly <= 0 || Lx * Ly > 16) {
@@ -279,33 +575,82 @@ int main(int argc, char** argv) {
   //   a_k = a_nonmom / (N/2) = 2 * a_nonmom / N, with a_nonmom = 72.
   const int n_sites = Lx * Ly;
   const int a_nonmom = 72;
-  const int lz_default = std::max(20, (2 * a_nonmom) / std::max(1, n_sites));
+  const int lz_default_k = std::max(20, (2 * a_nonmom) / std::max(1, n_sites));
   const int lz_steps = has_arg(argc, argv, "lanczos-steps")
-                           ? parse_int_arg(argc, argv, "lanczos-steps", lz_default)
-                           : lz_default;
+                           ? parse_int_arg(argc, argv, "lanczos-steps", lz_default_k)
+                           : lz_default_k;
   const unsigned fseed = static_cast<unsigned>(parse_int_arg(argc, argv, "seed", 7));
   const char* out_path = parse_string_arg(argc, argv, "out");
   const int no_monitor = parse_int_arg(argc, argv, "no-monitor", 0);
   const int no_log_k_dims = parse_int_arg(argc, argv, "no-log-k-dims", 0);
   const bool log_k_dims = (no_log_k_dims == 0);
-  const int ed_cutoff = parse_int_arg(argc, argv, "ed-cutoff", 64);
+  int ed_cutoff = parse_int_arg(argc, argv, "ed-cutoff", 64);
+  if (solver_set && solver == NmuSolver::Ed && !has_arg(argc, argv, "ed-cutoff")) {
+    ed_cutoff = std::numeric_limits<int>::max() / 4;
+  }
   const int mem_report = parse_int_arg(argc, argv, "mem-report", 0);
   const int mem_report_detail = parse_int_arg(argc, argv, "mem-report-detail", 0);
   const int lanczos_ws_report = parse_int_arg(argc, argv, "lanczos-ws-report", 0);
   const int mem_instrument = parse_int_arg(argc, argv, "mem-instrument", 0);
   /// 0 = reuse Gram-build scratch across K (default). 1 = release dense build buffers after each K (A/B experiment).
   const int gram_build_no_reuse = parse_int_arg(argc, argv, "gram-build-no-reuse", 0);
-  // Prototype: `--kblock-prototype=pkhpk-mf` uses `tiny_pk::apply_symmetrized_PK_H_PK_vector_matrix_free` per (nu,nd,K)
-  // with Lanczos/ED dimension dk = dim_full (full particle-sector Fock list). No HubbardMomentumBlock / Gram / zheev.
-  // Differs from production Gram blocks when dk_Gram != dim_full; use only for experiments on small lattices.
-  // Default (no flag): unchanged Gram-based HubbardMomentumBlock path.
+  const int kblock_prototype_diagnostics = parse_int_arg(argc, argv, "kblock-prototype-diagnostics", 0);
+  const int kblock_diagnostics_prod_dim = parse_int_arg(argc, argv, "kblock-diagnostics-prod-dim", 0);
+  // Prototype: `--kblock-prototype=pkhpk-mf` uses matrix-free P_K H P_K on full sector (dk = dim_full).
+  // `--kblock-prototype=im-pk-reduced`: `momentum_phi_gram_k_out_only` (same G+zheev+tol as production) for k_out; no packed V.
+  // If k_out>0 and build_tiny_im_pk_reduced has r==k_out, use H_red=U†HU (no HubbardMomentumBlock). Else fall back.
+  // rank(P) alone is unsafe vs k_out (see tests/test_k_gram_mismatch_scan.cpp).
+  // `--kblock-prototype=orbit-matrix-free`: bridged T H_orb T^{-1} matvec for seed parity with Gram path when dims match.
+  // `--kblock-prototype=orbit-direct`: Lanczos/FTLM in orbit coords via apply_orbit_k_block only (no Gram/Phi/T).
+  // Default (no flag): Gram-based HubbardMomentumBlock.
   const char* kblock_prototype_arg = parse_string_arg(argc, argv, "kblock-prototype");
-  const bool kblock_proto_pkhpk_mf =
+  bool kblock_proto_pkhpk_mf =
       kblock_prototype_arg != nullptr && std::strcmp(kblock_prototype_arg, "pkhpk-mf") == 0;
+  bool kblock_proto_im_pk_reduced =
+      kblock_prototype_arg != nullptr && std::strcmp(kblock_prototype_arg, "im-pk-reduced") == 0;
+  bool kblock_proto_orbit_mf =
+      kblock_prototype_arg != nullptr && std::strcmp(kblock_prototype_arg, "orbit-matrix-free") == 0;
+  bool kblock_proto_orbit_direct =
+      kblock_prototype_arg != nullptr && std::strcmp(kblock_prototype_arg, "orbit-direct") == 0;
   constexpr int kPkhpkMfMaxDim = 64;
-  if (kblock_prototype_arg != nullptr && !kblock_proto_pkhpk_mf) {
+  constexpr int kImPkReducedMaxDim = 64;
+  constexpr int kOrbitMfMaxDim = 512;
+
+  if (solver_set) {
+    if (solver == NmuSolver::KGram) {
+      if (kblock_prototype_arg != nullptr) {
+        std::cerr << "bench_ftlm_nmu_rect_k: --solver=k-gram cannot be combined with --kblock-prototype\n";
+        return 2;
+      }
+      kblock_proto_pkhpk_mf = false;
+      kblock_proto_im_pk_reduced = false;
+      kblock_proto_orbit_mf = false;
+      kblock_proto_orbit_direct = false;
+    } else if (solver == NmuSolver::KOrbit) {
+      if (kblock_prototype_arg != nullptr && std::strcmp(kblock_prototype_arg, "orbit-direct") != 0) {
+        std::cerr << "bench_ftlm_nmu_rect_k: --solver=k-orbit only allows --kblock-prototype=orbit-direct (or omit it)\n";
+        return 2;
+      }
+      kblock_proto_pkhpk_mf = false;
+      kblock_proto_im_pk_reduced = false;
+      kblock_proto_orbit_mf = false;
+      kblock_proto_orbit_direct = true;
+    } else if (solver == NmuSolver::Ed) {
+      if (kblock_prototype_arg != nullptr) {
+        std::cerr << "bench_ftlm_nmu_rect_k: --solver=ed cannot be combined with --kblock-prototype\n";
+        return 2;
+      }
+      kblock_proto_pkhpk_mf = false;
+      kblock_proto_im_pk_reduced = false;
+      kblock_proto_orbit_mf = false;
+      kblock_proto_orbit_direct = false;
+    }
+  }
+
+  if (kblock_prototype_arg != nullptr && !kblock_proto_pkhpk_mf && !kblock_proto_im_pk_reduced && !kblock_proto_orbit_mf &&
+      !kblock_proto_orbit_direct) {
     std::cerr << "bench_ftlm_nmu_rect_k: unknown --kblock-prototype=" << kblock_prototype_arg
-              << " (supported: pkhpk-mf)\n";
+              << " (supported: pkhpk-mf, im-pk-reduced, orbit-matrix-free, orbit-direct)\n";
     return 2;
   }
 #if !defined(_WIN32)
@@ -314,6 +659,25 @@ int main(int argc, char** argv) {
   }
 #endif
   std::size_t max_gram_storage_bytes = 0;
+  std::uint64_t im_pk_gram_prefilter_k_in_zero_skip = 0;
+  std::uint64_t orbit_mf_blocks_used = 0;
+  std::uint64_t orbit_mf_blocks_skipped_zero = 0;
+  std::uint64_t orbit_mf_dim_mismatch_rejected = 0;
+  std::uint64_t orbit_direct_blocks_used = 0;
+  std::uint64_t orbit_direct_skipped_zero = 0;
+  std::uint64_t diag_orbit_mf_dk_sum = 0;
+  std::uint64_t diag_orbit_direct_dk_sum = 0;
+  std::uint64_t diag_prod_dk_sum = 0;
+  std::uint64_t diag_prod_blocks = 0;
+  std::uint64_t diag_im_pk_dk_sum = 0;
+  std::uint64_t diag_im_pk_blocks = 0;
+  std::uint64_t diag_pkhpk_dk_sum = 0;
+  std::uint64_t diag_pkhpk_blocks = 0;
+  double diag_max_rss_at_block = 0.0;
+  int diag_max_rss_nu = -1;
+  int diag_max_rss_nd = -1;
+  int diag_max_rss_kx = -1;
+  int diag_max_rss_ky = -1;
 
   const auto t_wall0 = clock::now();
 
@@ -337,6 +701,13 @@ int main(int argc, char** argv) {
   fpar.seed = fseed;
 
   std::cout << "=== FTLM grand-canonical n(mu) " << Lx << "x" << Ly << " with momentum blocks ===\n";
+  if (solver_set) {
+    std::cout << "[solver] " << solver_label(solver);
+    if (solver == NmuSolver::Ed) {
+      std::cout << "  ed_cutoff=" << ed_cutoff;
+    }
+    std::cout << "\n";
+  }
   std::cout << "beta=" << beta << "  t=" << p.t << " tp=" << p.tp << " U=" << p.U << " V=" << p.V << "\n";
   std::cout << "ftlm_random=" << n_rand << " lanczos_steps=" << lz_steps << "  sectors=" << nsec << "\n";
   if (!no_monitor) {
@@ -348,6 +719,25 @@ int main(int argc, char** argv) {
   if (kblock_proto_pkhpk_mf) {
     std::cout << "[kblock-prototype] pkhpk-mf: matrix-free P_K H P_K on full sector when dim_full<=" << kPkhpkMfMaxDim
               << " (no HubbardMomentumBlock / Gram build for those blocks)\n";
+  }
+  if (kblock_proto_im_pk_reduced) {
+    std::cout << "[kblock-prototype] im-pk-reduced: after Gram k_out check, U from dense P_K, H_red=U†HU when dim_full<="
+              << kImPkReducedMaxDim << " and r==k_out; else HubbardMomentumBlock\n";
+  }
+  if (kblock_proto_orbit_mf) {
+    std::cout << "[kblock-prototype] orbit-matrix-free: when dk_orbit==dk_prod, T=Phi^dagger O build + y=T H_orb T^-1 x "
+                 "(FTLM random starts stay in Gram coords); else HubbardMomentumBlock; dim_full<="
+              << kOrbitMfMaxDim << "\n";
+  }
+  if (kblock_proto_orbit_direct) {
+    std::cout << "[kblock-prototype] orbit-direct: OrbitKBlockBasis + apply_orbit_k_block in orbit coords (no Phi Gram, "
+                 "no T bridge); dim_full<="
+              << kOrbitMfMaxDim << "\n";
+  }
+  if ((kblock_proto_orbit_mf || kblock_proto_orbit_direct) && kblock_prototype_diagnostics != 0) {
+    std::cout << "[kblock-diagnostics] per-K lines on stderr; kblock-diagnostics-prod-dim="
+              << kblock_diagnostics_prod_dim
+              << " (1 runs full Gram dim on orbit-mf / orbit-direct blocks — slow)\n";
   }
 
   const auto t0 = clock::now();
@@ -410,13 +800,27 @@ int main(int argc, char** argv) {
       fpar.quad_scratch = &sector_quad_scratch;
       for (int ky = 0; ky < Ly; ++ky) {
         for (int kx = 0; kx < Lx; ++kx) {
+          const auto t_block0 = clock::now();
           const ftlm::symmetry::MomentumSector K{kx, ky, Lx, Ly};
           const auto kb = ftlm::symmetry::KBasis::build(map, K);
           const bool use_pkhpk_mf_here = kblock_proto_pkhpk_mf && dim_full > 0 && dim_full <= kPkhpkMfMaxDim;
+          const bool try_im_pk_reduced_here =
+              kblock_proto_im_pk_reduced && dim_full > 0 && dim_full <= kImPkReducedMaxDim;
+          // Conservative Step-3 gate: only mixed-spin, non-empty/non-full sectors where tiny parity tests are strongest.
+          const bool orbit_mf_sector_safe = (nu > 0 && nd > 0 && nu < n_sites && nd < n_sites);
+          const bool try_orbit_direct_here =
+              kblock_proto_orbit_direct && orbit_mf_sector_safe && dim_full > 0 && dim_full <= kOrbitMfMaxDim;
+          const bool try_orbit_mf_here =
+              kblock_proto_orbit_mf && orbit_mf_sector_safe && dim_full > 0 && dim_full <= kOrbitMfMaxDim;
 
           int dk = 0;
           std::function<void(const std::complex<double>*, std::complex<double>*)> apply_h;
           std::unique_ptr<ftlm::symmetry::HubbardMomentumBlock> kblock_hold;
+          std::unique_ptr<ftlm::symmetry::TinyImPkReducedHamiltonian> im_pk_hold;
+          std::unique_ptr<ftlm::symmetry::OrbitKBlockBasis> orbit_basis_hold;
+          bool use_im_pk_here = false;
+          bool use_orbit_mf_here = false;
+          bool use_orbit_direct_here = false;
 
           if (use_pkhpk_mf_here) {
             dk = dim_full;
@@ -425,7 +829,157 @@ int main(int argc, char** argv) {
               ftlm::symmetry::tiny_pk::apply_symmetrized_PK_H_PK_vector_matrix_free(
                   p, fb, Lx, Ly, K, hub.hoppings, hub.nn_pairs, x, y, &pkhpk_w1, &pkhpk_w2);
             };
-          } else {
+          } else if (try_orbit_direct_here) {
+            orbit_basis_hold = std::make_unique<ftlm::symmetry::OrbitKBlockBasis>();
+            orbit_basis_hold->build(fb, K);
+            const int dk_orbit = orbit_basis_hold->dim();
+            if (dk_orbit > 0) {
+              dk = dk_orbit;
+              ++orbit_direct_blocks_used;
+              use_orbit_direct_here = true;
+              max_dk_sector = std::max(max_dk_sector, dk);
+              apply_h = [ptr = orbit_basis_hold.get(), &p, &fb, &hub](const std::complex<double>* x,
+                                                                     std::complex<double>* y) {
+                ftlm::symmetry::apply_orbit_k_block(p, fb, *ptr, hub.hoppings, hub.nn_pairs, x, y);
+              };
+            } else {
+              ++orbit_direct_skipped_zero;
+              orbit_basis_hold.reset();
+            }
+          } else if (try_orbit_mf_here) {
+            orbit_basis_hold = std::make_unique<ftlm::symmetry::OrbitKBlockBasis>();
+            orbit_basis_hold->build(fb, K);
+            const int dk_orbit = orbit_basis_hold->dim();
+            const std::size_t dk_prod_dim = hub.momentum_block_dim(map, K, nu, nd);
+            if (dk_orbit > 0 && static_cast<std::size_t>(dk_orbit) == dk_prod_dim) {
+              // FTLM draws random vectors in Gram ONB coordinates. apply_orbit_k_block expects orbit coefficients for
+              // the raw Bloch columns O. Use H_Gram = T H_orb T^{-1} with T = Phi^dagger O so Lanczos matches production.
+              auto bridge_block =
+                  std::make_unique<ftlm::symmetry::HubbardMomentumBlock>(hub, map, K, nu, nd, &sector_k_scratch);
+              const int dk_bridge = static_cast<int>(bridge_block->dim());
+              if (dk_bridge == dk_orbit) {
+                sector_k_scratch.ensure_d_full(dim_full);
+                std::vector<C> T(static_cast<std::size_t>(dk_orbit * dk_orbit), C(0.0, 0.0));
+                for (int jc = 0; jc < dk_orbit; ++jc) {
+                  const auto& rep = orbit_basis_hold->entries()[static_cast<std::size_t>(jc)].rep;
+                  ftlm::symmetry::detail::fill_phi_orbit_bloch_from_seed(map, K, Lx, Ly, fb, rep,
+                                                                        sector_k_scratch.vin.data());
+                  bridge_block->project_full_to_block(sector_k_scratch.vin.data(), T.data() + jc * dk_orbit);
+                }
+                std::vector<C> Tinv = T;
+                if (invert_colmajor_gauss_jordan(dk_orbit, &Tinv)) {
+                  bridge_block.reset();
+                  auto T_sh = std::make_shared<std::vector<C>>(std::move(T));
+                  auto Tinv_sh = std::make_shared<std::vector<C>>(std::move(Tinv));
+                  auto xo_sh = std::make_shared<std::vector<C>>(static_cast<std::size_t>(dk_orbit));
+                  auto yo_sh = std::make_shared<std::vector<C>>(static_cast<std::size_t>(dk_orbit));
+                  dk = dk_orbit;
+                  ++orbit_mf_blocks_used;
+                  use_orbit_mf_here = true;
+                  max_dk_sector = std::max(max_dk_sector, dk);
+                  apply_h = [T_sh, Tinv_sh, xo_sh, yo_sh, dk_orbit, ptr = orbit_basis_hold.get(), &p, &fb, &hub](
+                                const std::complex<double>* x, std::complex<double>* y) {
+                    C* xo = xo_sh->data();
+                    C* yo = yo_sh->data();
+                    for (int i = 0; i < dk_orbit; ++i) {
+                      C acc(0.0, 0.0);
+                      for (int k = 0; k < dk_orbit; ++k) {
+                        acc += (*Tinv_sh)[static_cast<std::size_t>(i + k * dk_orbit)] * x[k];
+                      }
+                      xo[i] = acc;
+                    }
+                    ftlm::symmetry::apply_orbit_k_block(p, fb, *ptr, hub.hoppings, hub.nn_pairs, xo, yo);
+                    for (int i = 0; i < dk_orbit; ++i) {
+                      C acc(0.0, 0.0);
+                      for (int k = 0; k < dk_orbit; ++k) {
+                        acc += (*T_sh)[static_cast<std::size_t>(i + k * dk_orbit)] * yo[k];
+                      }
+                      y[i] = acc;
+                    }
+                  };
+                } else {
+                  kblock_hold = std::move(bridge_block);
+                  dk = static_cast<int>(kblock_hold->dim());
+                  max_dk_sector = std::max(max_dk_sector, dk);
+                  max_k_in_sector = std::max(max_k_in_sector, kblock_hold->gram_k_in());
+                  max_k_out_sector = std::max(max_k_out_sector, kblock_hold->gram_k_out());
+                  max_phi_bytes_sector = std::max(max_phi_bytes_sector, kblock_hold->phi_bytes());
+                  max_gram_g_dense_b = std::max(max_gram_g_dense_b, kblock_hold->gram_g_dense_bytes_estimate());
+                  max_gram_v_b = std::max(max_gram_v_b, kblock_hold->gram_v_bytes());
+                  max_gram_seed_b = std::max(max_gram_seed_b, kblock_hold->gram_seed_bytes());
+                  max_gram_eval_b = std::max(max_gram_eval_b, kblock_hold->gram_eval_bytes());
+                  if (mem_report != 0) {
+                    max_gram_storage_bytes = std::max(max_gram_storage_bytes, kblock_hold->phi_bytes());
+                  }
+                  apply_h = [ptr = kblock_hold.get()](const std::complex<double>* x, std::complex<double>* y) {
+                    ptr->apply(x, y);
+                  };
+                  orbit_basis_hold.reset();
+                }
+              } else {
+                kblock_hold = std::move(bridge_block);
+                dk = static_cast<int>(kblock_hold->dim());
+                max_dk_sector = std::max(max_dk_sector, dk);
+                max_k_in_sector = std::max(max_k_in_sector, kblock_hold->gram_k_in());
+                max_k_out_sector = std::max(max_k_out_sector, kblock_hold->gram_k_out());
+                max_phi_bytes_sector = std::max(max_phi_bytes_sector, kblock_hold->phi_bytes());
+                max_gram_g_dense_b = std::max(max_gram_g_dense_b, kblock_hold->gram_g_dense_bytes_estimate());
+                max_gram_v_b = std::max(max_gram_v_b, kblock_hold->gram_v_bytes());
+                max_gram_seed_b = std::max(max_gram_seed_b, kblock_hold->gram_seed_bytes());
+                max_gram_eval_b = std::max(max_gram_eval_b, kblock_hold->gram_eval_bytes());
+                if (mem_report != 0) {
+                  max_gram_storage_bytes = std::max(max_gram_storage_bytes, kblock_hold->phi_bytes());
+                }
+                apply_h = [ptr = kblock_hold.get()](const std::complex<double>* x, std::complex<double>* y) {
+                  ptr->apply(x, y);
+                };
+                orbit_basis_hold.reset();
+              }
+            } else {
+              if (dk_orbit > 0) {
+                ++orbit_mf_dim_mismatch_rejected;
+                if (kblock_prototype_diagnostics != 0) {
+                  std::cerr << "[orbit-mf-dim-gate] reject nu=" << nu << " nd=" << nd << " k=(" << kx << "," << ky << ")"
+                            << " dk_orbit=" << dk_orbit << " dk_prod=" << dk_prod_dim << "\n";
+                }
+              } else {
+                ++orbit_mf_blocks_skipped_zero;
+              }
+              orbit_basis_hold.reset();
+            }
+          } else if (try_im_pk_reduced_here) {
+            // Same k_out as production (G + zheev + tol_ev) via momentum_phi_gram_k_out_only — no packed V/evals.
+            // When k_in==0, fill_gram_zheev_keep_indices fails immediately; skip fill+zheev (same outcome as gram_ok==false).
+            std::vector<ftlm::symmetry::RawState> seeds = ftlm::symmetry::momentum_phi_seeds(map, K);
+            bool gram_ok = false;
+            ftlm::symmetry::GramKOutDiagnostics gram_dim{};
+            if (seeds.empty()) {
+              ++im_pk_gram_prefilter_k_in_zero_skip;
+            } else {
+              gram_ok = ftlm::symmetry::momentum_phi_gram_k_out_only(map, K, Lx, Ly, fb, &gram_dim,
+                                                                     &sector_k_scratch.zheev,
+                                                                     &sector_k_scratch.gram_build, &seeds);
+            }
+            // When k_out>0 and r==k_out, apply uses H_red=U†HU only (no HubbardMomentumBlock).
+            if (gram_ok && gram_dim.k_out > 0) {
+              im_pk_hold = std::make_unique<ftlm::symmetry::TinyImPkReducedHamiltonian>();
+              if (ftlm::symmetry::build_tiny_im_pk_reduced_hamiltonian(p, fb, Lx, Ly, K, hub.hoppings, hub.nn_pairs,
+                                                                       kImPkReducedMaxDim, im_pk_hold.get()) &&
+                  im_pk_hold->r > 0 &&
+                  static_cast<std::size_t>(im_pk_hold->r) == gram_dim.k_out) {
+                dk = im_pk_hold->r;
+                use_im_pk_here = true;
+                max_dk_sector = std::max(max_dk_sector, dk);
+                apply_h = [ptr = im_pk_hold.get()](const std::complex<double>* x, std::complex<double>* y) {
+                  ptr->apply(x, y);
+                };
+              } else {
+                im_pk_hold.reset();
+              }
+            }
+          }
+
+          if (dk == 0 && !use_pkhpk_mf_here && !use_orbit_mf_here && !use_orbit_direct_here) {
             kblock_hold = std::make_unique<ftlm::symmetry::HubbardMomentumBlock>(hub, map, K, nu, nd, &sector_k_scratch);
             dk = static_cast<int>(kblock_hold->dim());
             max_dk_sector = std::max(max_dk_sector, dk);
@@ -447,9 +1001,66 @@ int main(int argc, char** argv) {
           dim_k_total += dk;
           if (log_k_dims) {
             std::cerr << "  k=(" << kx << "," << ky << ") dim=" << dk << " kb_dim=" << kb.dim()
-                      << (use_pkhpk_mf_here ? " [pkhpk-mf]" : "") << "\n";
+                      << (use_pkhpk_mf_here ? " [pkhpk-mf]" : "")
+                      << (use_im_pk_here ? " [im-pk-reduced r=rank(Im P_K) Gram-bypass]" : "")
+                      << (use_orbit_mf_here ? " [orbit-matrix-free]" : "")
+                      << (use_orbit_direct_here ? " [orbit-direct]" : "") << "\n";
           }
-          if (dk <= 0) {
+
+          std::size_t prod_dim_compare = 0;
+          if (kblock_prototype_diagnostics != 0 && kblock_diagnostics_prod_dim != 0 && dk > 0 &&
+              ((kblock_proto_orbit_mf && use_orbit_mf_here) || (kblock_proto_orbit_direct && use_orbit_direct_here))) {
+            prod_dim_compare = hub.momentum_block_dim(map, K, nu, nd);
+          }
+
+          const char* path_tag = "none";
+          if (use_pkhpk_mf_here) {
+            path_tag = "pkhpk-mf";
+          } else if (use_orbit_mf_here) {
+            path_tag = "orbit-mf";
+          } else if (use_orbit_direct_here) {
+            path_tag = "orbit-direct";
+          } else if (use_im_pk_here) {
+            path_tag = "im-pk-reduced";
+          } else if (kblock_hold) {
+            path_tag = "production";
+          }
+          const std::size_t orbit_dim = orbit_basis_hold ? orbit_basis_hold->dim() : 0;
+          const std::size_t prod_dim_from_block = kblock_hold ? static_cast<std::size_t>(kblock_hold->dim()) : 0;
+
+          if ((kblock_proto_orbit_mf || kblock_proto_orbit_direct) && kblock_prototype_diagnostics != 0) {
+            if (use_pkhpk_mf_here) {
+              ++diag_pkhpk_blocks;
+              diag_pkhpk_dk_sum += static_cast<std::uint64_t>(dk);
+            } else if (use_orbit_mf_here) {
+              diag_orbit_mf_dk_sum += static_cast<std::uint64_t>(dk);
+            } else if (use_orbit_direct_here) {
+              diag_orbit_direct_dk_sum += static_cast<std::uint64_t>(dk);
+            } else if (use_im_pk_here) {
+              ++diag_im_pk_blocks;
+              diag_im_pk_dk_sum += static_cast<std::uint64_t>(dk);
+            } else if (kblock_hold) {
+              ++diag_prod_blocks;
+              diag_prod_dk_sum += static_cast<std::uint64_t>(dk);
+            }
+            if (dk <= 0) {
+              const double rss_now = peak_rss_bytes_self();
+              if (rss_now > diag_max_rss_at_block) {
+                diag_max_rss_at_block = rss_now;
+                diag_max_rss_nu = nu;
+                diag_max_rss_nd = nd;
+                diag_max_rss_kx = kx;
+                diag_max_rss_ky = ky;
+              }
+              const double wall_s = std::chrono::duration<double>(clock::now() - t_block0).count();
+              std::cerr << "[kblock-diag] nu=" << nu << " nd=" << nd << " k=(" << kx << "," << ky << ")"
+                        << " dim_full=" << dim_full << " kb_dim=" << kb.dim() << " dk=" << dk << " path=" << path_tag
+                        << " orbit_dim=" << orbit_dim << " prod_dim_block=" << prod_dim_from_block
+                        << " prod_dim_gram_compare=" << prod_dim_compare << " wall_s=" << wall_s
+                        << " rss_peak_B=" << rss_now << " (no_lz)\n";
+              continue;
+            }
+          } else if (dk <= 0) {
             continue;
           }
           if (lanczos_ws_report != 0) {
@@ -468,8 +1079,25 @@ int main(int argc, char** argv) {
             lz_k = ftlm::ftlm_log_partition_complex(dk, apply_h, beta, fpar);
           }
           logZ_sector = logsumexp2(logZ_sector, lz_k);
-          if (!use_pkhpk_mf_here && gram_build_no_reuse != 0) {
+          if (!use_pkhpk_mf_here && !use_im_pk_here && !use_orbit_mf_here && !use_orbit_direct_here &&
+              gram_build_no_reuse != 0) {
             sector_k_scratch.gram_build.release_capacity();
+          }
+          if ((kblock_proto_orbit_mf || kblock_proto_orbit_direct) && kblock_prototype_diagnostics != 0) {
+            const double rss_now = peak_rss_bytes_self();
+            if (rss_now > diag_max_rss_at_block) {
+              diag_max_rss_at_block = rss_now;
+              diag_max_rss_nu = nu;
+              diag_max_rss_nd = nd;
+              diag_max_rss_kx = kx;
+              diag_max_rss_ky = ky;
+            }
+            const double wall_s = std::chrono::duration<double>(clock::now() - t_block0).count();
+            std::cerr << "[kblock-diag] nu=" << nu << " nd=" << nd << " k=(" << kx << "," << ky << ")"
+                      << " dim_full=" << dim_full << " kb_dim=" << kb.dim() << " dk=" << dk << " path=" << path_tag
+                      << " orbit_dim=" << orbit_dim << " prod_dim_block=" << prod_dim_from_block
+                      << " prod_dim_gram_compare=" << prod_dim_compare << " wall_s=" << wall_s
+                      << " lz_k=" << lz_k << " rss_peak_B=" << rss_now << "\n";
           }
         }
       }
@@ -587,9 +1215,48 @@ int main(int argc, char** argv) {
       file.flush();
     }
   }
-  std::cout << "METRIC kind=FTLM_nmu_rect_k wall_time_s=" << t_wall << " wall_sector_logZ_s=" << t_sectors
-            << " peak_rss_bytes=" << peak_b << " peak_rss_mib=" << peak_mib << " n_mu=" << n_mu
-            << " gram_build_no_reuse=" << gram_build_no_reuse
-            << " kblock_prototype=" << (kblock_proto_pkhpk_mf ? "pkhpk-mf" : "none") << "\n";
+  std::cout << "METRIC kind=FTLM_nmu_rect_k solver=" << (solver_set ? solver_label(solver) : "default")
+            << " wall_time_s=" << t_wall << " wall_sector_logZ_s=" << t_sectors << " peak_rss_bytes=" << peak_b
+            << " peak_rss_mib=" << peak_mib << " n_mu=" << n_mu << " gram_build_no_reuse=" << gram_build_no_reuse
+            << " kblock_prototype="
+            << (kblock_proto_pkhpk_mf ? "pkhpk-mf"
+                                      : (kblock_proto_im_pk_reduced ? "im-pk-reduced"
+                                                                     : (kblock_proto_orbit_direct
+                                                                            ? "orbit-direct"
+                                                                            : (kblock_proto_orbit_mf ? "orbit-matrix-free"
+                                                                                                    : "none"))));
+  if (kblock_proto_im_pk_reduced) {
+    std::cout << " im_pk_gram_prefilter_k_in_zero_skip=" << im_pk_gram_prefilter_k_in_zero_skip;
+  }
+  if (kblock_proto_orbit_mf) {
+    std::cout << " orbit_mf_blocks_used=" << orbit_mf_blocks_used
+              << " orbit_mf_blocks_skipped_zero=" << orbit_mf_blocks_skipped_zero
+              << " orbit_mf_dim_mismatch_rejected=" << orbit_mf_dim_mismatch_rejected;
+  }
+  if (kblock_proto_orbit_direct) {
+    std::cout << " orbit_direct_blocks_used=" << orbit_direct_blocks_used
+              << " orbit_direct_skipped_zero=" << orbit_direct_skipped_zero;
+  }
+  if ((kblock_proto_orbit_mf || kblock_proto_orbit_direct) && kblock_prototype_diagnostics != 0) {
+    std::cout << " diag_prod_blocks=" << diag_prod_blocks << " diag_prod_dk_sum=" << diag_prod_dk_sum
+              << " diag_orbit_mf_dk_sum=" << diag_orbit_mf_dk_sum
+              << " diag_orbit_direct_dk_sum=" << diag_orbit_direct_dk_sum << " diag_pkhpk_blocks=" << diag_pkhpk_blocks
+              << " diag_pkhpk_dk_sum=" << diag_pkhpk_dk_sum << " diag_im_pk_blocks=" << diag_im_pk_blocks
+              << " diag_im_pk_dk_sum=" << diag_im_pk_dk_sum << " diag_max_rss_block_nu_nd=(" << diag_max_rss_nu << ","
+              << diag_max_rss_nd << ") diag_max_rss_block_k=(" << diag_max_rss_kx << "," << diag_max_rss_ky
+              << ") diag_peak_rss_B_at_block=" << diag_max_rss_at_block;
+    std::cout << std::flush;
+    std::cerr << "[kblock-diag-summary] orbit_mf_blocks_used=" << orbit_mf_blocks_used
+              << " orbit_mf_skipped_zero=" << orbit_mf_blocks_skipped_zero
+              << " orbit_mf_dim_mismatch_rejected=" << orbit_mf_dim_mismatch_rejected
+              << " orbit_direct_blocks_used=" << orbit_direct_blocks_used
+              << " orbit_direct_skipped_zero=" << orbit_direct_skipped_zero
+              << " prod_blocks=" << diag_prod_blocks << " sum_dk_prod=" << diag_prod_dk_sum
+              << " sum_dk_orbit_mf=" << diag_orbit_mf_dk_sum << " sum_dk_orbit_direct=" << diag_orbit_direct_dk_sum
+              << " pkhpk_blocks=" << diag_pkhpk_blocks << " im_pk_blocks=" << diag_im_pk_blocks
+              << " max_rss_at_block_nu_nd=(" << diag_max_rss_nu << "," << diag_max_rss_nd << ") k=(" << diag_max_rss_kx
+              << "," << diag_max_rss_ky << ") diag_peak_rss_B=" << diag_max_rss_at_block << "\n";
+  }
+  std::cout << "\n";
   return 0;
 }

@@ -88,6 +88,24 @@ void HubbardMomentumBlock::apply(const std::complex<double>* x, std::complex<dou
   gram_.project_block_from_full(*orbit_map_, K_, fb_, pwout->data(), y, gram_scr);
 }
 
+void HubbardMomentumBlock::project_full_to_block(const std::complex<double>* v_full,
+                                                 std::complex<double>* x_block) const {
+  if (dk_ == 0) {
+    return;
+  }
+  MomentumPhiGramApplyScratch* gram_scr = scratch_ != nullptr ? &scratch_->gram_apply : nullptr;
+  gram_.project_block_from_full(*orbit_map_, K_, fb_, v_full, x_block, gram_scr);
+}
+
+void HubbardMomentumBlock::lift_block_to_full(const std::complex<double>* x_block,
+                                               std::complex<double>* v_full) const {
+  if (dk_ == 0) {
+    return;
+  }
+  MomentumPhiGramApplyScratch* gram_scr = scratch_ != nullptr ? &scratch_->gram_apply : nullptr;
+  gram_.lift_full_from_block(*orbit_map_, K_, fb_, x_block, v_full, gram_scr);
+}
+
 void HubbardMomentumAction::apply(const MomentumSectorMap& orbit_map, MomentumSector K, int n_up, int n_dn,
                                   const std::complex<double>* x, std::complex<double>* y) const {
   HubbardMomentumBlock block(*this, orbit_map, K, n_up, n_dn, nullptr);

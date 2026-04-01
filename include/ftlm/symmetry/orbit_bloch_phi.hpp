@@ -167,7 +167,34 @@ struct MomentumPhiGramBuildScratch {
     col_j.shrink_to_fit();
     evals_all.shrink_to_fit();
   }
+  /// Drop all capacity (A/B: no-reuse mode after each K build to avoid retained Gram-build arena).
+  void release_capacity() {
+    std::vector<std::complex<double>>().swap(g);
+    std::vector<std::complex<double>>().swap(col_i);
+    std::vector<std::complex<double>>().swap(col_j);
+    std::vector<double>().swap(evals_all);
+  }
 };
+
+/// Diagnostics for the raw-seed Gram matrix \(G=\Phi_{\mathrm{raw}}^\dagger\Phi_{\mathrm{raw}}\) **without** packing
+/// `MomentumPhiGramBasis::V` (same `k_out` count as `MomentumPhiGramBasis::build`).
+struct GramKOutDiagnostics {
+  std::size_t k_in = 0;
+  std::size_t k_out = 0;
+  double lam_max = 0.0;
+  double tol_ev = 0.0;
+};
+
+/// Computes `k_out`, `lam_max`, `tol_ev` with the **same** rule as `MomentumPhiGramBasis::build` (fill \(G\), `zheev`,
+/// count eigenvalues \(>\) `tol_ev`), but **does not** store seeds, `V`, or block eigenvalues. For prototype gating
+/// without allocating the packed whitening matrix.
+/// If `seeds_in` is non-null, uses that seed list (caller must match `momentum_phi_seeds(orbit_map, K)`); otherwise
+/// builds seeds internally.
+bool momentum_phi_gram_k_out_only(const MomentumSectorMap& orbit_map, MomentumSector K, int lx, int ly,
+                                  const FockBasis& fb, GramKOutDiagnostics* out,
+                                  ZheevHermitianScratch* zheev_scratch = nullptr,
+                                  MomentumPhiGramBuildScratch* build_scratch = nullptr,
+                                  const std::vector<RawState>* seeds_in = nullptr);
 
 /// Matrix-free data for the **same** orthonormal Bloch basis as `build_momentum_phi_orbit_orthonormal`:
 /// raw Bloch columns from `seeds`, Gram matrix \(G=\Phi_{\mathrm{raw}}^\dagger \Phi_{\mathrm{raw}}\), Hermitian

@@ -31,6 +31,8 @@ add_library(ftlm_core STATIC
   src/hubbard_hamiltonian.cpp
   src/hubbard_momentum_action.cpp
   src/orbit_bloch_phi.cpp
+  src/orbit_k_block_basis.cpp
+  src/k_block_im_pk_reduced.cpp
   src/lanczos.cpp
   src/ftlm_thermo.cpp
 )
@@ -71,9 +73,19 @@ if(FTLM_BUILD_BENCHMARKS)
   target_link_libraries(ftlm_phi_compare_dense_vs_orbit PRIVATE ftlm_core)
   add_executable(ftlm_diag_orbit_pk_column_trace benchmarks/diag_orbit_pk_column_trace.cpp)
   target_link_libraries(ftlm_diag_orbit_pk_column_trace PRIVATE ftlm_core)
+  add_executable(ftlm_diag_orbit_mf_vs_prod_scan benchmarks/diag_orbit_mf_vs_prod_scan.cpp)
+  target_link_libraries(ftlm_diag_orbit_mf_vs_prod_scan PRIVATE ftlm_core)
+  add_executable(ftlm_diag_orbit_h_matrix_compare benchmarks/diag_orbit_h_matrix_compare.cpp)
+  target_link_libraries(ftlm_diag_orbit_h_matrix_compare PRIVATE ftlm_core)
+  add_executable(ftlm_diag_orbit_sector_33_3x2 benchmarks/diag_orbit_sector_33_3x2.cpp)
+  target_link_libraries(ftlm_diag_orbit_sector_33_3x2 PRIVATE ftlm_core)
+  add_executable(ftlm_diag_orbit_overlap_s benchmarks/diag_orbit_overlap_s.cpp)
+  target_link_libraries(ftlm_diag_orbit_overlap_s PRIVATE ftlm_core)
   if(APPLE)
     target_link_libraries(ftlm_phi_compare_dense_vs_orbit PRIVATE "-framework Accelerate")
     target_link_libraries(ftlm_diag_orbit_pk_column_trace PRIVATE "-framework Accelerate")
+    target_link_libraries(ftlm_diag_orbit_mf_vs_prod_scan PRIVATE "-framework Accelerate")
+    target_link_libraries(ftlm_diag_orbit_overlap_s PRIVATE "-framework Accelerate")
   endif()
 endif()
 
@@ -172,4 +184,24 @@ if(FTLM_BUILD_TESTS)
   add_executable(ftlm_test_k_block_pk_matrix_free tests/test_k_block_pk_matrix_free.cpp)
   target_link_libraries(ftlm_test_k_block_pk_matrix_free PRIVATE ftlm_core)
   add_test(NAME k_block_pk_matrix_free COMMAND ftlm_test_k_block_pk_matrix_free)
+
+  add_executable(ftlm_test_k_dim_analysis tests/test_k_dim_analysis.cpp)
+  target_link_libraries(ftlm_test_k_dim_analysis PRIVATE ftlm_core)
+  add_test(NAME k_dim_analysis COMMAND ftlm_test_k_dim_analysis)
+
+  add_executable(ftlm_test_k_block_im_pk_reduced tests/test_k_block_im_pk_reduced.cpp)
+  target_link_libraries(ftlm_test_k_block_im_pk_reduced PRIVATE ftlm_core)
+  add_test(NAME k_block_im_pk_reduced COMMAND ftlm_test_k_block_im_pk_reduced)
+
+  add_executable(ftlm_test_k_gram_mismatch_scan tests/test_k_gram_mismatch_scan.cpp)
+  target_link_libraries(ftlm_test_k_gram_mismatch_scan PRIVATE ftlm_core)
+  add_test(NAME k_gram_mismatch_scan COMMAND ftlm_test_k_gram_mismatch_scan)
+
+  add_executable(ftlm_test_orbit_k_block_basis tests/test_orbit_k_block_basis.cpp)
+  target_link_libraries(ftlm_test_orbit_k_block_basis PRIVATE ftlm_core)
+  add_test(NAME orbit_k_block_basis COMMAND ftlm_test_orbit_k_block_basis)
+
+  add_executable(ftlm_test_orbit_k_block_apply_vs_production tests/test_orbit_k_block_apply_vs_production.cpp)
+  target_link_libraries(ftlm_test_orbit_k_block_apply_vs_production PRIVATE ftlm_core)
+  add_test(NAME orbit_k_block_apply_vs_production COMMAND ftlm_test_orbit_k_block_apply_vs_production)
 endif()

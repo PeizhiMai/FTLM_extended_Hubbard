@@ -1,0 +1,9 @@
+# 3×2 four-solver benchmark — runtime and peak RSS from METRIC lines (C++ getrusage RUSAGE_SELF).
+# Executable: ftlm_bench_ftlm_nmu_rect_k
+# peak_rss_gb = peak_rss_bytes / 1024^3 (binary GB, i.e. GiB).
+#
+# solver	label	wall_time_s	wall_sector_logZ_s	peak_rss_gb
+nonmom	non-momentum FTLM	6.83161	6.82919	0.006370544434
+k-gram	k-block Gram	15.7828	15.7815	0.03606034443
+k-orbit	k-block orbit	9.05825	9.05681	0.006343843415
+ed	ED (dense per k-block)	8.78316	8.7816	0.03506084904

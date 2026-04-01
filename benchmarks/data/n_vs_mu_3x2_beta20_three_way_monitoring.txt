@@ -1,7 +1,7 @@
 === 3x2 cluster: β=20, μ∈[-5,25], n_μ=221, t=1 tp=-0.35 U=5.75 V=0.9 ===
-date: 2026-03-24T17:54:06Z
+date: 2026-03-28T02:01:52Z
 
---- 1) FTLM non-momentum (ftlm_bench_ftlm_nmu_rect) — C++ monitor ---
+--- 1) FTLM non-momentum (ftlm_bench_ftlm_nmu_rect) — C++ monitor + time -l ---
 === FTLM grand-canonical n(mu)  3x2  beta=20 ===
 t=1 tp=-0.35 U=5.75 V=0.9
 ftlm_random=12 lanczos_steps=72  sectors=49
@@ -55,41 +55,41 @@ sector (6,3) dim=20 logZ=-675.204
 sector (6,4) dim=15 logZ=-869.017
 sector (6,5) dim=6 logZ=-1206.19
 sector (6,6) dim=1 logZ=-1554
-[timing] all sectors logZ: 7.17403 s
+[timing] all sectors logZ: 6.54546 s
 wrote /Users/cosdis/Desktop/AI_builder/ftlm_extended_hubbard/benchmarks/data/n_vs_mu_3x2_beta20_ftlm_nomom.tsv
-[monitor] wall_time_s=7.17581  wall_sector_logZ_s=7.17403  peak_rss_mib=6.40625  peak_rss_bytes=6.71744e+06
-METRIC kind=FTLM_nmu_rect Lx=3 Ly=2 beta=20 wall_time_s=7.17581 wall_sector_logZ_s=7.17403 peak_rss_bytes=6.71744e+06 peak_rss_mib=6.40625 n_mu=221
-        7.19 real         7.09 user         0.02 sys
-             6717440  maximum resident set size
+[monitor] wall_time_s=6.54801  wall_sector_logZ_s=6.54546  peak_rss_mib=6.40234  peak_rss_bytes=6.71334e+06
+METRIC kind=FTLM_nmu_rect Lx=3 Ly=2 beta=20 wall_time_s=6.54801 wall_sector_logZ_s=6.54546 peak_rss_bytes=6.71334e+06 peak_rss_mib=6.40234 n_mu=221
+        6.57 real         6.50 user         0.03 sys
+             6721536  maximum resident set size
                    0  average shared memory size
                    0  average unshared data size
                    0  average unshared stack size
-                1884  page reclaims
-                   5  page faults
+                1828  page reclaims
+                  38  page faults
                    0  swaps
                    0  block input operations
                    0  block output operations
                    0  messages sent
                    0  messages received
                    0  signals received
-                  18  voluntary context switches
-                3096  involuntary context switches
-        175788302009  instructions retired
-         27805318904  cycles elapsed
-             5310072  peak memory footprint
+                  51  voluntary context switches
+                2338  involuntary context switches
+        181528744293  instructions retired
+         25521412926  cycles elapsed
+             5515208  peak memory footprint
 
---- 2) FTLM momentum k-blocks (ftlm_bench_ftlm_nmu_rect_k) — C++ monitor ---
+--- 2) FTLM momentum k-blocks (ftlm_bench_ftlm_nmu_rect_k) — C++ monitor + time -l ---
 === FTLM grand-canonical n(mu) 3x2 with momentum blocks ===
 beta=20  t=1 tp=-0.35 U=5.75 V=0.9
-ftlm_random=12 lanczos_steps=24  sectors=49
+ftlm_random=12 lanczos_steps=72  sectors=49
 [monitor] wall time + peak RSS reported at exit (disable with --no-monitor=1)
 sector (0,0) dim_full=1 dim_k_total=1 ed_blocks=1 ftlm_blocks=0 logZ=-0
 sector (0,1) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=56.0007
-sector (0,2) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=87.3746
+sector (0,2) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=87.2975
 sector (0,3) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=101.461
 sector (0,4) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=95.2975
 sector (0,5) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-55.3069
-sector (0,6) dim_full=1 dim_k_total=1 ed_blocks=1 ftlm_blocks=0 logZ=-216
+sector (0,6) dim_full=1 dim_k_total=0 ed_blocks=0 ftlm_blocks=0 logZ=-inf
 sector (1,0) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=56.0007
 sector (1,1) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=89.0648
 sector (1,2) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=101.832
@@ -97,27 +97,27 @@ sector (1,3) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
 sector (1,4) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=38.6127
 sector (1,5) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-129.938
 sector (1,6) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-346.999
-sector (2,0) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=87.3746
+sector (2,0) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=87.2975
 sector (2,1) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=101.832
 sector (2,2) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
 sector (2,3) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=47.1732
-sector (2,4) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=-47.8381
+sector (2,4) dim_full=225 dim_k_total=216 ed_blocks=6 ftlm_blocks=0 logZ=-47.8816
 sector (2,5) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-250.114
 sector (2,6) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=-502.625
 sector (3,0) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=101.461
 sector (3,1) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=95.3248
 sector (3,2) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=47.1732
-sector (3,3) dim_full=400 dim_k_total=400 ed_blocks=0 ftlm_blocks=6 logZ=-33.5754
+sector (3,3) dim_full=400 dim_k_total=400 ed_blocks=0 ftlm_blocks=6 logZ=-33.5301
 sector (3,4) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=-157.474
 sector (3,5) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=-398.007
 sector (3,6) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=-675.539
 sector (4,0) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=95.2975
 sector (4,1) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=38.6127
-sector (4,2) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=-47.8381
+sector (4,2) dim_full=225 dim_k_total=216 ed_blocks=6 ftlm_blocks=0 logZ=-47.8816
 sector (4,3) dim_full=300 dim_k_total=300 ed_blocks=6 ftlm_blocks=0 logZ=-157.474
 sector (4,4) dim_full=225 dim_k_total=225 ed_blocks=6 ftlm_blocks=0 logZ=-297.607
 sector (4,5) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-574.82
-sector (4,6) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (4,6) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
 sector (5,0) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-55.3069
 sector (5,1) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-129.938
 sector (5,2) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-250.114
@@ -125,61 +125,55 @@ sector (5,3) dim_full=120 dim_k_total=120 ed_blocks=6 ftlm_blocks=0 logZ=-398.00
 sector (5,4) dim_full=90 dim_k_total=90 ed_blocks=6 ftlm_blocks=0 logZ=-574.82
 sector (5,5) dim_full=36 dim_k_total=36 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
 sector (5,6) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-1206.31
-sector (6,0) dim_full=1 dim_k_total=1 ed_blocks=1 ftlm_blocks=0 logZ=-216
+sector (6,0) dim_full=1 dim_k_total=0 ed_blocks=0 ftlm_blocks=0 logZ=-inf
 sector (6,1) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-346.999
 sector (6,2) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=-502.625
 sector (6,3) dim_full=20 dim_k_total=20 ed_blocks=6 ftlm_blocks=0 logZ=-675.539
-sector (6,4) dim_full=15 dim_k_total=15 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
+sector (6,4) dim_full=15 dim_k_total=12 ed_blocks=6 ftlm_blocks=0 logZ=-868.703
 sector (6,5) dim_full=6 dim_k_total=6 ed_blocks=6 ftlm_blocks=0 logZ=-1206.31
 sector (6,6) dim_full=1 dim_k_total=1 ed_blocks=1 ftlm_blocks=0 logZ=-1554
-[timing] all sectors logZ: 164.003 s
+[timing] all sectors logZ: 15.9524 s
 wrote /Users/cosdis/Desktop/AI_builder/ftlm_extended_hubbard/benchmarks/data/n_vs_mu_3x2_beta20_ftlm_k.tsv
-[monitor] wall_time_s=164.004  wall_sector_logZ_s=164.003  peak_rss_mib=122.605  peak_rss_bytes=1.28561e+08
-METRIC kind=FTLM_nmu_rect_k wall_time_s=164.004 wall_sector_logZ_s=164.003 peak_rss_bytes=1.28561e+08 peak_rss_mib=122.605 n_mu=221
-      164.02 real       211.31 user        24.30 sys
-           128561152  maximum resident set size
+[monitor] wall_time_s=15.9545  wall_sector_logZ_s=15.9524  peak_rss_mib=41.3555  peak_rss_bytes=4.33644e+07
+METRIC kind=FTLM_nmu_rect_k wall_time_s=15.9545 wall_sector_logZ_s=15.9524 peak_rss_bytes=4.33644e+07 peak_rss_mib=41.3555 n_mu=221 gram_build_no_reuse=0 kblock_prototype=none
+       15.97 real        16.19 user         0.26 sys
+            43376640  maximum resident set size
                    0  average shared memory size
                    0  average unshared data size
                    0  average unshared stack size
-               44895  page reclaims
-                  33  page faults
+               10782  page reclaims
+                  24  page faults
                    0  swaps
                    0  block input operations
                    0  block output operations
                    0  messages sent
                    0  messages received
                    0  signals received
-                  24  voluntary context switches
-             4588189  involuntary context switches
-       4875775622624  instructions retired
-        876637312403  cycles elapsed
-           144677456  peak memory footprint
+                  27  voluntary context switches
+               40794  involuntary context switches
+        371716986720  instructions retired
+         64364419599  cycles elapsed
+            42334584  peak memory footprint
 
 --- 3) ED (NumPy hubbard_rect_ed) — /usr/bin/time -l ---
 ED: n_mu points = 221   eigenlevels = 4096
-        1.23 real         0.91 user         0.10 sys
-           109076480  maximum resident set size
+        1.01 real         0.83 user         0.08 sys
+           101167104  maximum resident set size
                    0  average shared memory size
                    0  average unshared data size
                    0  average unshared stack size
-               31531  page reclaims
-                 406  page faults
+               29625  page reclaims
+                 390  page faults
                    0  swaps
                    0  block input operations
                    0  block output operations
                    0  messages sent
                    0  messages received
                    0  signals received
-                 582  voluntary context switches
-                5552  involuntary context switches
-         16764000113  instructions retired
-          3831622056  cycles elapsed
-            97384584  peak memory footprint
+                 580  voluntary context switches
+                4302  involuntary context switches
+         16745485362  instructions retired
+          3595006642  cycles elapsed
+            89179840  peak memory footprint
 
---- Summary (wall clock & peak RSS) ---
-Approach                    wall_time_s    C++ peak_rss_mib   time -l max RSS (bytes)   notes
-FTLM non-momentum           7.18           6.41               6,717,440                 full-sector FTLM; low RSS
-FTLM momentum k-blocks      164.0          122.6              128,561,152               FTLM on d_k>64 blocks; high RSS
-ED (NumPy, 4096 levels)     1.23           —                  109,076,480               one spectrum build + 221 μ evals
-
-macOS `time -l`: "real" is wall time; "maximum resident set size" is process high-water mark (often close to C++ [monitor] peak_rss_bytes).
+--- Summary (wall clock & peak RSS) — see benchmarks/memory_k_block.txt for scaling notes ---
