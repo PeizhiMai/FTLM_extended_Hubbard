@@ -14,4 +14,18 @@ alwaysApply: true
 
 ## Current codebase anchors
 
-- `FockBasis` + `apply_extended_hubbard` + `lanczos_extrema` are implemented; **FTLM thermodynamic estimators** are not yet (next milestone).
+- `FockBasis` + `apply_extended_hubbard` + `lanczos_extrema` are implemented.
+- **FTLM / n(μ)**: `ftlm_log_partition_*`, Ritz helpers (`ftlm_tridiagonal_ritz_from_lanczos_coeffs`, `ftlm_log_trace_exp_beta_ritz`), and `ftlm_grandcanonical_density_mu_grid` (full observable pipeline still evolving).
+
+# Benchmark regression discipline
+
+- After every substantial code change in FTLM/momentum paths:
+  1) rebuild (`cmake --build build -j8`)
+  2) run `benchmarks/run_3x2_three_way_monitoring.sh`
+  3) verify numerics match baseline:
+     - max|nonmom-ED|
+     - max|k-ED|
+     - max|nonmom-k|
+  4) report peak RSS and wall_time_s
+- Make exactly one substantial memory change per step.
+- If numerics differ, stop and fix before continuing.

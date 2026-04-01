@@ -183,39 +183,15 @@ int main(int argc, char** argv) {
   *out << "# ftlm_random=" << n_rand << " lanczos_steps=" << lz_steps << "  sector_time_s=" << t_sectors
        << "\n";
 
+  std::vector<double> mu_grid(static_cast<size_t>(n_mu));
   for (int k = 0; k < n_mu; ++k) {
     const double tmu = static_cast<double>(k) / static_cast<double>(n_mu - 1);
-    const double mu = mu_min + tmu * (mu_max - mu_min);
-
-    double mx = -std::numeric_limits<double>::infinity();
-    for (int i = 0; i < nsec; ++i) {
-      const double lz = logZ[static_cast<size_t>(i)];
-      if (!std::isfinite(lz)) {
-        continue;
-      }
-      const int N = Nelec[static_cast<size_t>(i)];
-      const double ex = lz + beta * mu * static_cast<double>(N);
-      mx = std::max(mx, ex);
-    }
-    if (!std::isfinite(mx)) {
-      *out << mu << "\t0\n";
-      continue;
-    }
-    double sum_w = 0.0;
-    double sum_Nw = 0.0;
-    for (int i = 0; i < nsec; ++i) {
-      const double lz = logZ[static_cast<size_t>(i)];
-      if (!std::isfinite(lz)) {
-        continue;
-      }
-      const int N = Nelec[static_cast<size_t>(i)];
-      const double ex = lz + beta * mu * static_cast<double>(N) - mx;
-      const double w = std::exp(ex);
-      sum_w += w;
-      sum_Nw += static_cast<double>(N) * w;
-    }
-    const double n_avg = (sum_w > 0.0) ? (sum_Nw / sum_w) / static_cast<double>(n_sites) : 0.0;
-    *out << mu << "\t" << n_avg << "\n";
+    mu_grid[static_cast<size_t>(k)] = mu_min + tmu * (mu_max - mu_min);
+  }
+  std::vector<double> n_density;
+  ftlm::ftlm_grandcanonical_density_mu_grid(n_sites, logZ, Nelec, beta, mu_grid, &n_density);
+  for (int k = 0; k < n_mu; ++k) {
+    *out << mu_grid[static_cast<size_t>(k)] << "\t" << n_density[static_cast<size_t>(k)] << "\n";
   }
 
   if (out_path) {

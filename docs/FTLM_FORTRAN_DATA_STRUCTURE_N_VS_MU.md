@@ -67,8 +67,10 @@ So **n vs μ** needs:
 | Sector `(nu, nd)` or momentum block | `FockBasis(n_sites, n_up, n_dn)` and/or `HubbardMomentumBlock` with fixed `K`. |
 | Sparse H | `apply_extended_hubbard` or block `apply` (complex Hermitian). |
 | Lanczos α, β | `lanczos_tridiagonal` → `alpha`, `beta`. |
-| Ritz values + `|⟨e_j|e_0⟩|` style weights | Diagonalize small tridiagonal (`tql2` / Jacobi as in `log_lanczos_tridiagonal_quadrature_exp` in `ftlm_thermo.cpp`) to get eigenvalues `λ_j` and **first-component weights** `V(0,j)^2` of eigenvectors. |
-| Stochastic / multi-sample | Fortran: explicit `nsmp` loops and `1/nsmp`. We already average over `FtlmParams::n_random` in `ftlm_log_partition_*`. |
+| Ritz values + `|⟨e_j|e_0⟩|` style weights | `ftlm_tridiagonal_ritz_from_lanczos_coeffs` → `eigenvalues`, `w0_squared` (`V_{0,j}^2`). |
+| Inner sum \(\ln\sum_j w_j e^{-\beta E_j}\) | `ftlm_log_trace_exp_beta_ritz` or `ftlm_log_tridiagonal_partition_exp` (same inner sum as `ftlm_log_partition_*` per random start). |
+| Grand-canonical \( \bar n(\mu)\) from sector log-Tr | `ftlm_grandcanonical_density_mu_grid` (same combination as `bench_ftlm_nmu_rect`). |
+| Stochastic / multi-sample | Fortran: explicit `nsmp` loops and `1/nsmp`. We average over `FtlmParams::n_random` in `ftlm_log_partition_*`. |
 
 **Easier quantity:** For **⟨N⟩(μ)** in the **grand-canonical** ensemble, you still sum sector contributions with **Boltzmann weights**; the Fortran code does this **explicitly per Ritz level** in the Lanczos subspace. Our current `ftlm_log_partition_complex` estimates **log Tr e^{-βH}** via Gaussian quadrature on the tridiagonal — a **different but equivalent FTLM flavor** (stochastic trace + continued fraction / quadrature). To match **n(μ)** curves, implement either:
 
