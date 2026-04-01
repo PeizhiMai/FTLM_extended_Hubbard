@@ -21,7 +21,7 @@ alwaysApply: true
 
 - After every substantial code change in FTLM/momentum paths:
   1) rebuild (`cmake --build build -j8`)
-  2) run `benchmarks/run_3x2_three_way_monitoring.sh`
+  2) run `benchmarks/run_nmu_regression.sh` (or `benchmarks/run_3x2_three_way_monitoring.sh` if already built); contract: `docs/BENCHMARK_NMU_CONTRACT.md`
   3) verify numerics match baseline:
      - max|nonmom-ED|
      - max|k-ED|
