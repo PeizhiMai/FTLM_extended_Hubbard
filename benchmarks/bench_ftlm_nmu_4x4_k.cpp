@@ -32,6 +32,7 @@
 #include "ftlm/hubbard_hamiltonian.hpp"
 #include "ftlm/hubbard_params.hpp"
 #include "ftlm/lattice.hpp"
+#include "ftlm/symmetry/hubbard_lanczos.hpp"
 #include "ftlm/symmetry/hubbard_momentum_action.hpp"
 #include "ftlm/symmetry/k_basis.hpp"
 #include "ftlm/symmetry/k_block_im_pk_reduced.hpp"
@@ -831,7 +832,7 @@ int main(int argc, char** argv) {
             };
           } else if (try_orbit_direct_here) {
             orbit_basis_hold = std::make_unique<ftlm::symmetry::OrbitKBlockBasis>();
-            orbit_basis_hold->build(fb, K);
+            orbit_basis_hold->build_from_map(map, K);
             const int dk_orbit = orbit_basis_hold->dim();
             if (dk_orbit > 0) {
               dk = dk_orbit;
@@ -848,7 +849,7 @@ int main(int argc, char** argv) {
             }
           } else if (try_orbit_mf_here) {
             orbit_basis_hold = std::make_unique<ftlm::symmetry::OrbitKBlockBasis>();
-            orbit_basis_hold->build(fb, K);
+            orbit_basis_hold->build_from_map(map, K);
             const int dk_orbit = orbit_basis_hold->dim();
             const std::size_t dk_prod_dim = hub.momentum_block_dim(map, K, nu, nd);
             if (dk_orbit > 0 && static_cast<std::size_t>(dk_orbit) == dk_prod_dim) {
@@ -1076,7 +1077,11 @@ int main(int argc, char** argv) {
             ++n_ftlm_blocks;
             const unsigned seed_k = fseed + static_cast<unsigned>(idx * 257 + ky * 17 + kx);
             fpar.seed = seed_k;
-            lz_k = ftlm::ftlm_log_partition_complex(dk, apply_h, beta, fpar);
+            if (kblock_hold) {
+              lz_k = ftlm::symmetry::ftlm_log_partition_hubbard_momentum_block_ref(*kblock_hold, beta, fpar);
+            } else {
+              lz_k = ftlm::ftlm_log_partition_complex(dk, apply_h, beta, fpar);
+            }
           }
           logZ_sector = logsumexp2(logZ_sector, lz_k);
           if (!use_pkhpk_mf_here && !use_im_pk_here && !use_orbit_mf_here && !use_orbit_direct_here &&
