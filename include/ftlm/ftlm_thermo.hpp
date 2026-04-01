@@ -20,6 +20,10 @@ struct FtlmTridiagonalQuadratureScratch {
 };
 
 /// Controls stochastic Lanczos depth for FTLM-style canonical traces (real-symmetric H).
+///
+/// **Typical memory per random start:** \(O(\mathrm{dim})\) complex via `lanczos_ws` (three vectors) plus
+/// \(O(\texttt{lanczos\_steps})\) real for α/β; Ritz/Jacobi may use `quad_scratch` \(O(\texttt{lanczos\_steps}^2)\).
+/// See `docs/FTLM_N_VS_MU_ROADMAP.md`.
 struct FtlmParams {
   int n_random = 16;
   int lanczos_steps = 96;

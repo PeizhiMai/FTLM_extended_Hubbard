@@ -60,6 +60,7 @@ Benchmarks require: `ftlm_bench_ftlm_nmu_rect`, `ftlm_bench_ftlm_nmu_rect_k`, Py
 
 ## Related docs
 
+- Implementation phases (FTLM → n(μ) → scale-up): `docs/FTLM_N_VS_MU_ROADMAP.md`
 - Fortran Ritz / Z assembly: `docs/FTLM_FORTRAN_DATA_STRUCTURE_N_VS_MU.md`
 - Quantum Basis Lanczos / symmetry reference: `docs/QUANTUM_BASIS_LANCZOS_SYMMETRY_REFERENCE.md`
 - Project rules: `.cursor/rules/ftlm-memory-first.mdc`
