@@ -54,6 +54,10 @@ Benchmarks require: `ftlm_bench_ftlm_nmu_rect`, `ftlm_bench_ftlm_nmu_rect_k`, Py
 | Stress | 4×2, 4×3 | Memory / time scaling |
 | Target | 4×4 (16 sites) | Single-node ~128 GB goal; tune `ftlm-random`, `lanczos-steps`, solver last |
 
+## Optional full Krylov (not in default n(μ) path)
+
+`ftlm::LanczosFullBasisBuffer` passed to `lanczos_tridiagonal` stores orthonormal columns \(v_0,\ldots,v_{m-1}\) (**O(dim × L)** complex). The canonical FTLM n(μ) benchmarks use only the **short** workspace (`LanczosComplexWorkspace`). Use the full buffer for tests or future observables; see `docs/QUANTUM_BASIS_LANCZOS_SYMMETRY_REFERENCE.md`.
+
 ## Related docs
 
 - Fortran Ritz / Z assembly: `docs/FTLM_FORTRAN_DATA_STRUCTURE_N_VS_MU.md`

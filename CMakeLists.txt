@@ -138,6 +138,10 @@ if(FTLM_BUILD_TESTS)
   target_link_libraries(ftlm_test_ftlm_thermo PRIVATE ftlm_core)
   add_test(NAME ftlm_thermo COMMAND ftlm_test_ftlm_thermo)
 
+  add_executable(ftlm_test_lanczos_ftlm_basis tests/test_lanczos_ftlm_basis.cpp)
+  target_link_libraries(ftlm_test_lanczos_ftlm_basis PRIVATE ftlm_core)
+  add_test(NAME lanczos_ftlm_basis COMMAND ftlm_test_lanczos_ftlm_basis)
+
   add_executable(ftlm_test_momentum_partition_2x2 tests/test_momentum_partition_2x2.cpp)
   target_link_libraries(ftlm_test_momentum_partition_2x2 PRIVATE ftlm_core)
   add_test(NAME momentum_partition_2x2 COMMAND ftlm_test_momentum_partition_2x2)

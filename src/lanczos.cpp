@@ -103,6 +103,45 @@ std::pair<double, double> jacobi_min_max(std::vector<std::vector<double>> A) {
 
 }  // namespace
 
+void lanczos_tridiagonal_pack_coeffs(const std::vector<double>& alpha, const std::vector<double>& beta,
+                                     std::vector<double>* packed) {
+  packed->clear();
+  const int n = static_cast<int>(alpha.size());
+  if (n <= 0) {
+    return;
+  }
+  if (static_cast<int>(beta.size()) < n - 1) {
+    return;
+  }
+  packed->reserve(static_cast<size_t>(2 * n - 1));
+  for (int i = 0; i < n - 1; ++i) {
+    packed->push_back(alpha[static_cast<size_t>(i)]);
+    packed->push_back(beta[static_cast<size_t>(i)]);
+  }
+  packed->push_back(alpha[static_cast<size_t>(n - 1)]);
+}
+
+bool lanczos_tridiagonal_unpack_coeffs(const std::vector<double>& packed, std::vector<double>* alpha,
+                                     std::vector<double>* beta) {
+  alpha->clear();
+  beta->clear();
+  const int len = static_cast<int>(packed.size());
+  if (len < 1 || (len % 2) == 0) {
+    return false;
+  }
+  const int n = (len + 1) / 2;
+  alpha->resize(static_cast<size_t>(n));
+  if (n >= 2) {
+    beta->resize(static_cast<size_t>(n - 1));
+  }
+  for (int i = 0; i < n - 1; ++i) {
+    (*alpha)[static_cast<size_t>(i)] = packed[static_cast<size_t>(2 * i)];
+    (*beta)[static_cast<size_t>(i)] = packed[static_cast<size_t>(2 * i + 1)];
+  }
+  (*alpha)[static_cast<size_t>(n - 1)] = packed[static_cast<size_t>(2 * (n - 1))];
+  return true;
+}
+
 std::pair<double, double> tridiagonal_extrema(const std::vector<double>& alpha,
                                               const std::vector<double>& beta, int steps) {
   const int n = steps;
@@ -126,11 +165,14 @@ int lanczos_tridiagonal(
     int dim,
     const std::function<void(const std::complex<double>* v, std::complex<double>* Hv)>& apply_h,
     int max_steps, unsigned seed, std::vector<double>* alpha, std::vector<double>* beta,
-    LanczosComplexWorkspace* ws) {
+    LanczosComplexWorkspace* ws, LanczosFullBasisBuffer* full_basis) {
   alpha->clear();
   beta->clear();
   if (dim <= 0 || max_steps <= 0) {
     return 0;
+  }
+  if (full_basis != nullptr) {
+    full_basis->ensure(dim, max_steps);
   }
   alpha->reserve(static_cast<size_t>(max_steps));
   if (max_steps > 1) {
@@ -178,6 +220,11 @@ int lanczos_tridiagonal(
   int steps_used = 0;
 
   for (int k = 0; k < max_steps; ++k) {
+    if (full_basis != nullptr) {
+      for (int i = 0; i < dim; ++i) {
+        full_basis->column(k)[static_cast<size_t>(i)] = q[static_cast<size_t>(i)];
+      }
+    }
     apply_h(q.data(), w.data());
     const std::complex<double> z = dotc(q, w);
     const double a_k = z.real();
@@ -205,6 +252,10 @@ int lanczos_tridiagonal(
     steps_used = k + 1;
   }
 
+  if (full_basis != nullptr) {
+    full_basis->dim = dim;
+    full_basis->steps_used = steps_used;
+  }
   return steps_used;
 }
 
