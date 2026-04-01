@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "ftlm/ftlm_thermo.hpp"
 #include "ftlm/lanczos.hpp"
 #include "ftlm/lanczos_engine.hpp"
 #include "ftlm/symmetry/hubbard_momentum_action.hpp"
@@ -36,6 +37,30 @@ struct HubbardKBlockApply {
     block->apply(x, y);
   }
 };
+
+/// Finite-temperature FTLM estimate of \(\ln \mathrm{Tr}\,e^{-\beta H}\) on one **orthonormal momentum block**
+/// (`HubbardMomentumBlock` in Gram–whitened coordinates). Same numerics as calling `ftlm_log_partition_complex`
+/// with a `HubbardKBlockApply` closure; provided to keep symmetry-sector FTLM call sites short.
+inline double ftlm_log_partition_hubbard_momentum_block(const HubbardMomentumAction& hub,
+                                                        const MomentumSectorMap& map, MomentumSector K,
+                                                        int n_up, int n_dn, double beta, const FtlmParams& par) {
+  auto blk = std::make_shared<HubbardMomentumBlock>(hub, map, K, n_up, n_dn);
+  const int dim = static_cast<int>(blk->dim());
+  HubbardKBlockApply binder{std::move(blk)};
+  return ftlm_log_partition_complex(dim, binder, beta, par);
+}
+
+/// Same numerics as `ftlm_log_partition_complex(dim, apply)` when `apply` is `HubbardMomentumBlock::apply` on an
+/// **already constructed** block (benchmarks keep one block per k-cell with shared Gram scratch; avoids repeating
+/// the lambda wrapper at every call site).
+inline double ftlm_log_partition_hubbard_momentum_block_ref(const HubbardMomentumBlock& block, double beta,
+                                                           const FtlmParams& par) {
+  const int dim = static_cast<int>(block.dim());
+  return ftlm_log_partition_complex(
+      dim,
+      [&block](const std::complex<double>* x, std::complex<double>* y) { block.apply(x, y); },
+      beta, par);
+}
 
 inline LanczosExtrema lanczos_extrema_hubbard_k_block(const HubbardMomentumAction& hub,
                                                       const MomentumSectorMap& map, MomentumSector K,

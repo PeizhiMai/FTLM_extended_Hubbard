@@ -66,6 +66,13 @@ Their README notes a **lattice-shape restriction** when using translation symmet
 - Many **random starts**, \(\beta\) in estimators, and **trace** formulas — not a single ground-state Lanczos chain.  
 - Prefer keeping **`O(dim)`** Lanczos workspace and **α, β** (as in `ftlm::lanczos_tridiagonal`) unless a documented observable path requires **\(O(L \cdot \dim)\)** storage.
 
+## Implemented in this repository (C++)
+
+- **`ftlm::LanczosFullBasisBuffer`** + optional last argument to **`ftlm::lanczos_tridiagonal`**: opt-in **full Krylov columns** \(v_0,\ldots,v_{m-1}\) (column-major), same recurrence as the default two-vector path; memory \(O(L\cdot\mathrm{dim})\).  
+- **`ftlm::lanczos_tridiagonal_pack_coeffs`** / **`ftlm::lanczos_tridiagonal_unpack_coeffs`**: interleaved \([α_0,β_0,α_1,\ldots,α_{n-1}]\) packing for checkpoints or I/O (analogous to a flat Hessenberg buffer).  
+- **`ftlm::symmetry::ftlm_log_partition_hubbard_momentum_block`**: one-call **finite-temperature** \(\ln\mathrm{Tr}\,e^{-\beta H}\) on a **`HubbardMomentumBlock`** (momentum sector), delegating to **`ftlm_log_partition_complex`**.  
+- Regression: `tests/test_lanczos_ftlm_basis.cpp` (full-basis consistency + pack roundtrip).
+
 ## Citation
 
 If you use Quantum Basis in research, their repository recommends citing the Zenodo entry linked from their README ([quantum_basis on GitHub](https://github.com/wztzjhn/quantum_basis)).
